@@ -92,7 +92,10 @@ def test_healing_overrides_casting_and_does_not_repeat_mind_blast():
     assert e.update(obs(),0).action=='mind_blast'
     e.update(obs(success='mind_blast',sseq=1),1.5)
     assert e.update(obs(hp=.35,success='mind_blast',sseq=1),1.8).action=='heal'
-    assert e.update(obs(hp=.9,success='mind_blast',sseq=1),3.6).action=='wand'
+    assert e.update(obs(hp=.9,success='mind_blast',sseq=1),3.6).action is None
+    # After the slower heal, a stale/absent Pain aura may be retried before
+    # Shoot, but the completed Mind Blast opener must never fire twice.
+    assert e.update(obs(hp=.9,success='mind_blast',sseq=1),5.0).action in ('pain', 'wand')
 
 
 def test_bridge_decodes_mind_blast_success_color():

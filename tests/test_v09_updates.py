@@ -34,14 +34,14 @@ def package_zip(release, out):
 
 def test_release_has_all_expected_assets(release):
     version, files = core.inspect_folder(release)
-    assert version == "0.24.0"
+    assert version == "0.24.1"
     assert core.REQUIRED.issubset(set(files))
 
 
 def test_zip_validated_extracted_with_own_paths(release, tmp_path):
     src = package_zip(release, tmp_path / "release.zip")
     version, files = core.inspect_zip(src)
-    assert version == "0.24.0"
+    assert version == "0.24.1"
     out = tmp_path / "out"
     out.mkdir()
     assert core.extract_checked(src, out) == version
@@ -92,7 +92,7 @@ def test_preserve_config_venv_settings_and_shortcut_across_upgrade(release, tmp_
     # Fake unchanged requirements -> no package-install invocation.
     (install / 'requirements.txt').write_bytes((release / 'requirements.txt').read_bytes())
     version = core.apply_release(release, install)
-    assert version == '0.24.0'
+    assert version == '0.24.1'
     assert interpreter.read_bytes() == b"fake venv (do not replace)"
     assert json.loads((install / 'config.json').read_text())['keys']['smite'] == 'q'
     assert json.loads((install / core.SETTINGS_FILENAME).read_text())['addons_dir'].startswith('X:')

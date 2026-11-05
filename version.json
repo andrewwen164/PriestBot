@@ -1,4 +1,4 @@
 {
-  "version": "0.24.0",
-  "description": "Optional compact PriestBridge telemetry layout with backward-compatible decoding; combat and Learning Mode unchanged."
+  "version": "0.24.1",
+  "description": "Priest healing rotation: 60% cast heals, optional 80% pre-pull Renew, and mana-aware pre-pull Shield; includes compact telemetry."
 }

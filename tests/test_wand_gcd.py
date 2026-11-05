@@ -33,7 +33,8 @@ def test_healing_cancels_pending_wand_start():
     assert e.update(o(), 0).action == 'pain'
     assert e.update(o(hp=.4), .3).action == 'heal'
     assert e.wand_start_at is None
-    assert e.update(o(hp=.9,target=.8), 2.1).action == 'wand'
+    assert e.update(o(hp=.9,target=.8), 2.1).action is None
+    assert e.update(o(hp=.9,target=.8), 3.6).action == 'wand'
 
 
 def test_target_change_cancels_pending_wand_start():
@@ -50,10 +51,10 @@ def test_target_change_cancels_pending_wand_start():
 def test_between_mob_heal_guard():
     c = Config(use_shield=False, main_damage='wand')
     e = PriestEngine(c)
-    assert e.update(o(hp=.65,target=0), 0).action == 'heal'
-    assert e.update(o(hp=.65,target=0), 1.7).action is None
-    assert e.update(o(hp=.65,target=0), 3).action is None
-    assert e.update(o(hp=.65,target=0), 4).action == 'heal'
+    assert e.update(o(hp=.55,target=0), 0).action == 'heal'
+    assert e.update(o(hp=.55,target=0), 1.7).action is None
+    assert e.update(o(hp=.55,target=0), 3).action is None
+    assert e.update(o(hp=.55,target=0), 4).action == 'heal'
 
 
 def test_smite_mode_keeps_existing_general_delay():

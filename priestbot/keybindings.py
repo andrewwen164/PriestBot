@@ -9,6 +9,7 @@ import re
 ACTION_LABELS = {
     "shield": "Power Word: Shield",
     "heal": "Heal / Lesser Heal",
+    "renew": "Renew (self-cast HoT)",
     "pain": "Shadow Word: Pain",
     "smite": "Smite",
     "mind_blast": "Mind Blast (opener)",

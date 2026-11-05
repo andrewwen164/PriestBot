@@ -50,6 +50,7 @@ class PriestEngine:
         self.last_offensive_kind = None
         self.pending_skip_reason = None
         self.last_shield = float('-inf')
+        self.last_renew = float('-inf')
         self.last_pain = float('-inf')
         self.last_smite = float('-inf')
         self.mb_opener_state = 'pending'  # pending | casting | done (per target)
@@ -91,13 +92,19 @@ class PriestEngine:
             # Other decisions (such as emergency healing) may still run;
             # the wand branch itself waits for wand_start_at.
             self.ready_at = now + max(0.0, self.cfg.pain_to_wand_delay_s)
-        elif kind in ("shield", "smite", "mind_blast", "heal", "melee", "next_target", "clear_target"):
+        elif kind in ("shield", "renew", "smite", "mind_blast", "heal", "melee", "next_target", "clear_target"):
             self.wand_start_at = None
         if kind in ("pain", "smite", "mind_blast", "wand", "melee"):
             self.last_offensive_at = now
             self.last_offensive_kind = kind
         if kind == "shield":
             self.last_shield = now
+        if kind == "renew":
+            self.last_renew = now
+        if kind == "heal":
+            # Heal ranks can be longer than the generic 1.7s action interval.
+            # Avoid cancelling our own cast if the addon casting flag is lost.
+            self.ready_at = max(self.ready_at, now + self.cfg.heal_cast_fallback_s)
         if kind == "pain":
             self.last_pain = now
         if kind == "smite":
@@ -109,7 +116,7 @@ class PriestEngine:
             # A completed Mind Blast cast (or a conservative timeout) is needed
             # before Pain. Do not apply the generic inter-spell delay.
             self.ready_at = now + self.cfg.mind_blast_cast_fallback_s
-        if kind in ("shield", "pain", "smite", "mind_blast", "heal"):
+        if kind in ("shield", "renew", "pain", "smite", "mind_blast", "heal"):
             # Casting interrupts previous wand/melee auto-attacks in some clients.
             self.wand_active = False
             self.melee_active = False
@@ -303,7 +310,7 @@ class PriestEngine:
                 self.no_target_since = now
             if now - self.no_target_since > self.cfg.max_no_target_s:
                 return Decision(None, "No reachable mobs for too long; stopped", stop=True)
-            if self.cfg.use_heal and hp < .74 and mana > self.cfg.heal_mana_min:
+            if self.cfg.use_heal and hp <= self.cfg.heal_below and mana > self.cfg.heal_mana_min:
                 if now - self.last_between_heal_at >= self.cfg.between_heal_retry_s:
                     self.last_between_heal_at = now
                     return self._act("heal", "Healing between mobs", now)
@@ -326,6 +333,18 @@ class PriestEngine:
                 self.no_target_attempts = 0
                 self.next_search_at = now + self.cfg.respawn_wait_s
                 return Decision(None, "Waiting for mob respawns before searching again")
+            # Preparation belongs immediately before a new pull, not during
+            # repeated unsuccessful Tab searches or respawn waits.
+            if self.no_target_attempts == 0:
+                if (self.cfg.use_renew and hp < self.cfg.renew_below and
+                        mana >= self.cfg.renew_mana_min and
+                        now - self.last_renew >= self.cfg.renew_interval_s):
+                    # Time-based, not claimed as confirmed aura uptime. Do not
+                    # refresh every tick while the HoT is still healing.
+                    return self._act('renew', 'Renew between pulls: HP below threshold', now)
+                if (mana >= self.cfg.prepull_shield_mana_min and
+                        self._should_shield(obs, now, mana)):
+                    return self._act('shield', 'Power Word: Shield before next pull', now)
             self.no_target_attempts += 1
             return self._act("next_target", "Searching for a hostile target", now)
         # Existing target may be acquired by tab (or manually).
@@ -359,15 +378,10 @@ class PriestEngine:
         # existing conservative 15s Weakened Soul rule for an explicit absent
         # reading from an older addon. The updated addon reports unknown when
         # lookup cannot be trusted, preserving the full confirmed estimate.
-        shield_present = obs.shield_aura in ('present', 'estimated') or (
-            obs.shield_aura in (None, 'unknown') and now < self.confirmed_shield_until)
         pain_present = (obs.pain_aura in ('present', 'estimated') or
                         now < self.confirmed_pain_until)
-        shield_gap = (self.cfg.aura_retry_s if obs.shield_aura == 'absent' else self.cfg.shield_interval_s)
         pain_gap = (self.cfg.aura_retry_s if obs.pain_aura == 'absent' else self.cfg.pain_interval_s)
-        if (self.cfg.use_shield and not shield_present and now - self.last_shield >= shield_gap and
-                now - self.last_shield_confirmed_at >= self.cfg.shield_lockout_s and
-                mana >= self.cfg.shield_mana_min):
+        if self._should_shield(obs, now, mana):
             return self._act("shield", "Shield missing/expired; attempting Power Word: Shield", now)
         if self.cfg.main_damage == 'mind_blast_wand' and self.mb_opener_state != 'done':
             if self.mb_opener_state == 'casting':
@@ -416,6 +430,17 @@ class PriestEngine:
                 return self._act("melee", "Starting melee auto-attack", now)
             return Decision(None, "Melee auto-attacking")
         return Decision(None, "Unknown damage mode; stopped", stop=True)
+
+    def _should_shield(self, obs: Observation, now: float, mana: float) -> bool:
+        """Shared in-combat and pre-pull protection with Weakened Soul guard."""
+        shield_present = obs.shield_aura in ('present', 'estimated') or (
+            obs.shield_aura in (None, 'unknown') and now < self.confirmed_shield_until)
+        shield_gap = (self.cfg.aura_retry_s if obs.shield_aura == 'absent'
+                      else self.cfg.shield_interval_s)
+        return (self.cfg.use_shield and not shield_present and
+                now - self.last_shield >= shield_gap and
+                now - self.last_shield_confirmed_at >= self.cfg.shield_lockout_s and
+                mana >= self.cfg.shield_mana_min)
 
     def _clear_current_target(self):
         self.pending_movement = None
