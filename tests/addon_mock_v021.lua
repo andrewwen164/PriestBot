@@ -8,6 +8,7 @@ function CreateFrame(kind,name,parent)
   if name then _G[name]=self end
   function self:SetSize(w,h) self.w=w;self.h=h end
   function self:SetPoint(...) self.point={...} end
+  function self:ClearAllPoints() self.point=nil end
   function self:SetFrameStrata(...) end
   function self:SetClampedToScreen(...) end
   function self:Show() end
@@ -18,6 +19,7 @@ function CreateFrame(kind,name,parent)
     local t={}
     function t:SetSize(w,h) self.w=w;self.h=h end
     function t:SetPoint(...) self.point={...} end
+    function t:ClearAllPoints() self.point=nil end
     function t:SetColorTexture(r,g,b,a) self.rgb={r,g,b} end
     function t:SetAllPoints(...) end
     function t:SetShown(...) end
@@ -108,4 +110,21 @@ end
 assert(seen['B|1|2|ACTIONBUTTON2|item|117|Food'],'2 binding missing')
 assert(seen['S|8092|Mind Blast'],'spell success event not encoded')
 assert(seen['B|1|SHIFT-G|MULTIACTIONBAR1BUTTON7|macro|9|Bandage > Heavy Linen Bandage'],'macro binding missing')
+-- Compact is purely a visual relayout: bindings/packets continue unchanged.
+SlashCmdList.PRIESTBRIDGE('compact')
+assert(PriestBridgeSettings.compact == true)
+assert(PriestBridgeFrame.w == 350 and PriestBridgeFrame.h == 48)
+assert(PriestBridgeFrame.point[1]=='TOPRIGHT')
+local compactBars = 0
+for _,frame in ipairs(frames) do
+  if frame.kind=='StatusBar' then
+    assert(frame.h==4)
+    compactBars=compactBars+1
+  end
+end
+assert(compactBars==3)
+SlashCmdList.PRIESTBRIDGE('normal')
+assert(PriestBridgeSettings.compact == false)
+assert(PriestBridgeFrame.w == 270 and PriestBridgeFrame.h == 102)
+assert(PriestBridgeFrame.point[1]=='TOPLEFT')
 print('LUA MOCK OK: bindings and optical checksums validated')

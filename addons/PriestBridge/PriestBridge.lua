@@ -1,4 +1,4 @@
--- PriestBridge v0.23.0. Client-side, display-only telemetry for a permitted private client.
+-- PriestBridge v0.24.0. Client-side, display-only telemetry for a permitted private client.
 -- No game-memory access, sockets, arbitrary filesystem access or protected game actions.
 -- Modern combat secrets: never compare/calculate/display text from secret health values.
 -- Health/mana/target bars use the native StatusBar widget, as in v0.6.
@@ -23,6 +23,10 @@ end
 square(0, 12, 1, 0, 1)
 square(16, 12, 0, 1, 1)
 square(32, 12, 1, 1, 0)
+-- Only visible in compact mode. The Python reader uses this sentinel to
+-- select the compact bar/sidecar geometry; old readers safely fail closed.
+local compactMarker = square(156, 8, .15, .9, .4)
+compactMarker:SetShown(false)
 
 local function makeBar(y, r, g, b)
     local bar = CreateFrame('StatusBar', nil, ROOT)
@@ -371,7 +375,7 @@ SlashCmdList.PRIESTBRIDGE = function(msg)
     elseif msg == 'test target' then newTarget()
     elseif msg == 'auras' then evaluateAuras(); print('PriestBridge aura status: shield='..shieldState..', pain='..painState..' (estimated=cast timer; unknown=unreadable)')
     else
-        print('PriestBridge v0.23.2: /pb show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
+        print('PriestBridge v0.24: /pb compact|normal|show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
     end
 end
 
@@ -391,6 +395,61 @@ for i=1,32 do
 end
 local semMarkerA = squareOnRow(180,0,8, 0,.75,.35)
 local semMarkerB = squareOnRow(196,0,8, .75,.4,0)
+
+-- Native StatusBars are necessary on clients that mark health/power values
+-- secret in combat. Never convert those protected values into RGB numbers.
+-- Compact mode retains 160-pixel fill resolution, but flattens the display
+-- into a 350x48 strip near the top-right edge of the WoW window. The 32-byte
+-- semantic tiles remain 8x8 for robust full-byte color capture.
+local compactMode = false
+local function position(widget, x, y)
+    widget:ClearAllPoints()
+    widget:SetPoint('TOPLEFT', ROOT, 'TOPLEFT', x, -y)
+end
+local function setCompactMode(enabled)
+    compactMode = enabled == true
+    ROOT:ClearAllPoints()
+    if compactMode then
+        ROOT:SetSize(350, 48)
+        ROOT:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -8, -8)
+    else
+        ROOT:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
+        ROOT:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 20, -165)
+    end
+    compactMarker:SetShown(compactMode)
+    local bars = {hp, mana, enemy}
+    for i, bar in ipairs(bars) do
+        bar:SetSize(160, compactMode and 4 or 12)
+        position(bar, 0, compactMode and (14 + (i-1)*7) or (20 + (i-1)*20))
+    end
+    local row = compactMode and 37 or 84
+    position(marker08, 0, row)
+    position(shieldPixel, 16, row)
+    position(painPixel, 32, row)
+    position(successPixel, 48, row)
+    for i, tile in ipairs(successBits) do position(tile, 64 + (i-1)*12, row) end
+    for i, tile in ipairs(targetBits) do position(tile, 112 + (i-1)*12, row) end
+    for i, tile in ipairs(semTiles) do
+        local columns = compactMode and 16 or 8
+        local col = (i-1)%columns
+        local r = math.floor((i-1)/columns)
+        position(tile, 180 + col*10, (compactMode and 14 or 20) + r*10)
+    end
+end
+local layoutLoader = CreateFrame('Frame')
+layoutLoader:RegisterEvent('ADDON_LOADED')
+layoutLoader:SetScript('OnEvent', function(_, _, addonName)
+    if addonName ~= 'PriestBridge' then return end
+    if type(PriestBridgeSettings)=='table' and PriestBridgeSettings.compact==true then
+        setCompactMode(true)
+    end
+end)
+local function switchLayout(compact)
+    if type(PriestBridgeSettings)~='table' then PriestBridgeSettings={} end
+    PriestBridgeSettings.compact = compact
+    setCompactMode(compact)
+    print('PriestBridge telemetry: '..(compact and 'compact' or 'normal')..' mode')
+end
 local semSeq=0
 local semGeneration=0
 local semBindings={}
@@ -700,7 +759,9 @@ end)
 -- Run /pb bindings *out of combat* to inspect enumeration and packet backlog.
 local previousPriestBridgeSlash = SlashCmdList.PRIESTBRIDGE
 SlashCmdList.PRIESTBRIDGE=function(msg)
-    if msg=='bindings' then
+    if msg=='compact' then switchLayout(true)
+    elseif msg=='normal' or msg=='full' then switchLayout(false)
+    elseif msg=='bindings' then
         local count=0
         if type(GetNumBindings)=='function' then
             local ok,n=pcall(GetNumBindings)

@@ -18,7 +18,7 @@ def test_previous_zip_updater_still_accepts_icon_release(tmp_path):
     assert core.allowed_release_path("priestbot/icon_asset.py")
     assert not core.allowed_release_path("assets/PriestBot.ico")
     version, files = core.inspect_folder(root)
-    assert version == "0.23.3"
+    assert version == "0.24.0"
     assert "priestbot/icon_asset.py" in files
     assert "assets/PriestBot.ico" not in files
 

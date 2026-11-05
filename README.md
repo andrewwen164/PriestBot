@@ -1,4 +1,34 @@
-# PriestBot v0.23.3 — Windows Desktop Icon Cache Fix
+# PriestBot v0.24.0 — Compact PriestBridge Telemetry (Live Validation Pending)
+
+PriestBridge now has an optional **Compact Telemetry Mode**, designed to reduce
+screen obstruction while preserving the native StatusBars required for restricted
+combat health/power values and the existing optical action-semantics packets.
+
+- `/pb compact`: a 350×48 UI-unit strip near the top-right of the game window.
+- `/pb normal` (or `/pb full`): restore the original 270×102 panel in the
+  original top-left position. Both modes keep all previous telemetry fields.
+- Layout preference is saved in the addon's `PriestBridgeSettings` SavedVariables
+  and restored after logging back in or reloading the UI.
+- The Python bridge detects the compact-only marker automatically; there is no
+  manual health-bar coordinate calibration. The old layout remains supported.
+- **Not invisible:** the bars and packet tiles must remain unobscured and
+  rendered on-screen. Hiding them or setting transparency to zero prevents
+  optical decoding. The bars retain full 160-pixel fill resolution.
+- Update from ZIP in the permanent app, install/repair the updated PriestBridge,
+  then `/reload` in WoW. Test `/pb compact` and `/pb normal` with the app in
+  dry-run mode before enabling any gameplay inputs.
+- Synthetic Python and Lua mock tests cover layout and packet decoding; **live
+  WoW-client behavior, UI scaling, and color fidelity have not yet been tested**.
+  The pre-existing action-binding validation from v0.23.2 is still pending.
+
+No combat decision, movement, looting, learning, or model-deployment behavior
+was changed in this version.
+
+---
+
+## Previous release notes
+
+### v0.23.3 — Windows Desktop Icon Cache Fix
 
 - Uses a **new versioned Classic Priest icon filename** (`PriestBot.ClassicPriest.v2.ico`) under `%LOCALAPPDATA%\PriestBot`, avoiding stale Windows Explorer icon caching.
 - Recreates the existing desktop shortcut and requests a shell icon refresh on successful updates or the **Recreate desktop shortcut** button.
