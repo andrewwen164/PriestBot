@@ -8,7 +8,7 @@ from priestbot.semantic_bridge import decode_pixels, encode_for_test, monitor_se
 
 
 def compact_panel(hp=.76, mana=.48, target=.34, packet=None, scale=1,
-                  resample=Image.Resampling.NEAREST):
+                  resample=Image.Resampling.NEAREST, bottom_right=False):
     panel = np.full((48, 350, 3), (27, 37, 48), dtype=np.uint8)
 
     def tile(x, y, w, h, rgb):
@@ -48,8 +48,13 @@ def compact_panel(hp=.76, mana=.48, target=.34, packet=None, scale=1,
     width, height = round(350*scale), round(48*scale)
     resized = np.asarray(Image.fromarray(panel).resize(
         (width, height), resample))
-    canvas = np.full((190, 810, 3), (20, 40, 60), dtype=np.uint8)
-    canvas[23:23+height, 37:37+width] = resized
+    if bottom_right:
+        canvas = np.full((600, 1000, 3), (20, 40, 60), dtype=np.uint8)
+        x, y = canvas.shape[1] - width - 12, canvas.shape[0] - height - 12
+    else:
+        canvas = np.full((190, 810, 3), (20, 40, 60), dtype=np.uint8)
+        x, y = 37, 23
+    canvas[y:y+height, x:x+width] = resized
     return canvas
 
 
@@ -109,3 +114,21 @@ def test_monitor_semantics_grabs_the_new_compact_geometry():
     packet = monitor_semantics(FakeSct(), reading)
     assert packet is not None and packet.kind == 'L'
     assert packet.fields == ('slot_cleared', '1')
+
+
+@pytest.mark.parametrize('scale', (1, 1.17, 1.5, 2))
+def test_compact_bottom_right_optical_read_without_coordinate_calibration(scale):
+    """Decoder must find the marker near the bottom-right on any UI scale."""
+    packet_data = encode_for_test('T|hostile|alive', 13)
+    image = compact_panel(packet=packet_data, scale=scale, bottom_right=True)
+    reading = decode_bridge(image)
+    assert reading.layout == 'compact'
+    assert abs(reading.observation.hp - .76) < .02
+    assert abs(reading.observation.mana - .48) < .02
+    assert abs(reading.observation.target_hp - .34) < .02
+    assert abs(reading.marker_x + round(350 * scale) - (image.shape[1] - 12)) < 3
+    assert reading.marker_y > image.shape[0] // 2
+    decoded = decode_pixels(image, reading.marker_x, reading.marker_y,
+                            reading.scale, layout=reading.layout)
+    assert decoded is not None and decoded.kind == 'T'
+    assert decoded.sequence == 13

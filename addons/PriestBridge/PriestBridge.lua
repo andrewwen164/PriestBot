@@ -1,4 +1,4 @@
--- PriestBridge v0.24.0. Client-side, display-only telemetry for a permitted private client.
+-- PriestBridge v0.25.2. Client-side, display-only telemetry for a permitted private client.
 -- No game-memory access, sockets, arbitrary filesystem access or protected game actions.
 -- Modern combat secrets: never compare/calculate/display text from secret health values.
 -- Health/mana/target bars use the native StatusBar widget, as in v0.6.
@@ -375,7 +375,7 @@ SlashCmdList.PRIESTBRIDGE = function(msg)
     elseif msg == 'test target' then newTarget()
     elseif msg == 'auras' then evaluateAuras(); print('PriestBridge aura status: shield='..shieldState..', pain='..painState..' (estimated=cast timer; unknown=unreadable)')
     else
-        print('PriestBridge v0.24: /pb compact|normal|show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
+        print('PriestBridge v0.25.2: /pb compact|normal|top|bottom|show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
     end
 end
 
@@ -399,9 +399,11 @@ local semMarkerB = squareOnRow(196,0,8, .75,.4,0)
 -- Native StatusBars are necessary on clients that mark health/power values
 -- secret in combat. Never convert those protected values into RGB numbers.
 -- Compact mode retains 160-pixel fill resolution, but flattens the display
--- into a 350x48 strip near the top-right edge of the WoW window. The 32-byte
+-- into a 350x48 strip near a screen corner. Bottom-right is the default to
+-- avoid raid/buff UI at the top. The 32-byte
 -- semantic tiles remain 8x8 for robust full-byte color capture.
 local compactMode = false
+local compactAnchor = 'BOTTOMRIGHT'
 local function position(widget, x, y)
     widget:ClearAllPoints()
     widget:SetPoint('TOPLEFT', ROOT, 'TOPLEFT', x, -y)
@@ -411,7 +413,11 @@ local function setCompactMode(enabled)
     ROOT:ClearAllPoints()
     if compactMode then
         ROOT:SetSize(350, 48)
-        ROOT:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -8, -8)
+        if compactAnchor == 'TOPRIGHT' then
+            ROOT:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -8, -8)
+        else
+            ROOT:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT', -12, 12)
+        end
     else
         ROOT:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
         ROOT:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 20, -165)
@@ -440,6 +446,13 @@ local layoutLoader = CreateFrame('Frame')
 layoutLoader:RegisterEvent('ADDON_LOADED')
 layoutLoader:SetScript('OnEvent', function(_, _, addonName)
     if addonName ~= 'PriestBridge' then return end
+    -- Old settings only recorded compact=true/false. Place those existing
+    -- compact strips at the less crowded bottom-right on the first upgrade.
+    if type(PriestBridgeSettings)=='table' and PriestBridgeSettings.compactAnchor=='TOPRIGHT' then
+        compactAnchor = 'TOPRIGHT'
+    else
+        compactAnchor = 'BOTTOMRIGHT'
+    end
     if type(PriestBridgeSettings)=='table' and PriestBridgeSettings.compact==true then
         setCompactMode(true)
     end
@@ -449,6 +462,14 @@ local function switchLayout(compact)
     PriestBridgeSettings.compact = compact
     setCompactMode(compact)
     print('PriestBridge telemetry: '..(compact and 'compact' or 'normal')..' mode')
+end
+local function switchCompactAnchor(anchor)
+    if type(PriestBridgeSettings)~='table' then PriestBridgeSettings={} end
+    compactAnchor = anchor
+    PriestBridgeSettings.compactAnchor = anchor
+    PriestBridgeSettings.compact = true
+    setCompactMode(true)
+    print('PriestBridge compact telemetry: '..(anchor=='TOPRIGHT' and 'top-right' or 'bottom-right'))
 end
 local semSeq=0
 local semGeneration=0
@@ -761,6 +782,8 @@ local previousPriestBridgeSlash = SlashCmdList.PRIESTBRIDGE
 SlashCmdList.PRIESTBRIDGE=function(msg)
     if msg=='compact' then switchLayout(true)
     elseif msg=='normal' or msg=='full' then switchLayout(false)
+    elseif msg=='top' then switchCompactAnchor('TOPRIGHT')
+    elseif msg=='bottom' then switchCompactAnchor('BOTTOMRIGHT')
     elseif msg=='bindings' then
         local count=0
         if type(GetNumBindings)=='function' then
