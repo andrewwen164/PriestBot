@@ -22,7 +22,7 @@ APP_NAME = "PriestBot"
 DEFAULT_WOW_ADDONS = r"C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns"
 SETTINGS_FILENAME = "install_settings.json"
 STATUS_FILENAME = "last_update_status.json"
-APP_VERSION = "0.23.2"
+APP_VERSION = "0.23.3"
 REQUIRED = {
     "launch.py", "requirements.txt", "run_windows.bat",
     "priestbot/__init__.py", "priestbot/app.py", "priestbot/install_core.py",
@@ -337,8 +337,10 @@ def create_desktop_shortcut(root: Path) -> None:
     icon_path = create_priest_icon(root)
     script = (
         "$desktop=[Environment]::GetFolderPath('DesktopDirectory');"
+        "$shortcut=Join-Path $desktop 'PriestBot.lnk';"
+        "if (Test-Path -LiteralPath $shortcut) {Remove-Item -LiteralPath $shortcut -Force};"
         "$shell=New-Object -ComObject WScript.Shell;"
-        "$link=$shell.CreateShortcut((Join-Path $desktop 'PriestBot.lnk'));"
+        "$link=$shell.CreateShortcut($shortcut);"
         "$link.TargetPath=" + ps_literal(str(root / "run_windows.bat")) + ";"
         "$link.WorkingDirectory=" + ps_literal(str(root)) + ";"
         "$link.Description='PriestBot - private server companion';"
@@ -346,7 +348,34 @@ def create_desktop_shortcut(root: Path) -> None:
         "$link.Save()"
     )
     subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], check=True)
-    log(root, "Desktop shortcut created: PriestBot")
+    # Request a shell icon refresh. The versioned .ico filename also avoids
+    # Explorer retaining the old image for the same path.
+    try:
+        import ctypes
+        if hasattr(ctypes, "windll"):
+            ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
+    except (AttributeError, OSError):
+        pass  # Cosmetic refresh failure must not break application updates.
+    log(root, "Desktop shortcut created with Classic Priest icon: " + str(icon_path))
+
+
+
+def ensure_shortcut_icon_migrated(root: Path) -> bool:
+    """Repair once after an upgrade launched by an older updater process.
+
+    An updater may have imported the previous shortcut code before the new
+    files were copied. Running this after the upgraded GUI starts guarantees
+    that the versioned icon path reaches the desktop shortcut.
+    """
+    if sys.platform != "win32":
+        return False
+    root = Path(root)
+    marker = root / "shortcut_classic_priest_v2.marker"
+    if marker.exists():
+        return False
+    create_desktop_shortcut(root)
+    marker.write_text("Classic Priest shortcut icon v2 installed\n", encoding="utf-8")
+    return True
 
 
 def restart_application(root: Path) -> None:

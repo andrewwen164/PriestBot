@@ -22,8 +22,14 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.23.2 - Farming Demonstrations")
+        root.title("PriestBot 0.23.3 - Farming Demonstrations")
         root.geometry("1010x1020")
+        if sys.platform == "win32":
+            try:
+                from .icon_asset import create_priest_icon
+                root.iconbitmap(str(create_priest_icon(Path(__file__).resolve().parents[1])))
+            except (AttributeError, OSError, ImportError):
+                pass  # Cosmetic window icon must not prevent startup.
         self.cfg = Config.load()
         # Never inherit LIVE INPUT from an older copied config.json at startup.
         # The user must explicitly enable real keys in each app session.
@@ -69,6 +75,8 @@ class App:
         self.build()
         self.show_last_update_status()
         self.root.after(120, self.poll_events)
+        if sys.platform == "win32":
+            self.root.after(650, self._repair_shortcut_after_upgrade)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         try:
             from pynput import keyboard
@@ -76,6 +84,16 @@ class App:
             self.listener.start()
         except Exception as exc:
             messagebox.showerror("Hotkeys unavailable", f"Install dependencies with setup_windows.bat.\n{exc}")
+
+    def _repair_shortcut_after_upgrade(self):
+        try:
+            from .install_core import installed_dir, ensure_shortcut_icon_migrated
+            current = Path(__file__).resolve().parents[1]
+            if current.resolve() == installed_dir().resolve():
+                if ensure_shortcut_icon_migrated(current):
+                    self.log("Recreated desktop shortcut with the Classic Priest icon.")
+        except Exception as exc:
+            self.log("Shortcut icon refresh failed: " + str(exc))
 
     def build(self):
         frame=ttk.Frame(self.root, padding=15)

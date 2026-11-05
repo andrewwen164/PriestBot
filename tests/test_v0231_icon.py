@@ -18,7 +18,7 @@ def test_previous_zip_updater_still_accepts_icon_release(tmp_path):
     assert core.allowed_release_path("priestbot/icon_asset.py")
     assert not core.allowed_release_path("assets/PriestBot.ico")
     version, files = core.inspect_folder(root)
-    assert version == "0.23.2"
+    assert version == "0.23.3"
     assert "priestbot/icon_asset.py" in files
     assert "assets/PriestBot.ico" not in files
 
@@ -31,6 +31,7 @@ def test_windows_shortcut_points_to_local_priest_icon(tmp_path, monkeypatch):
     install_core.create_desktop_shortcut(tmp_path)
     assert calls
     powershell = calls[-1][-1]
-    assert 'PriestBot.ico,0' in powershell
+    assert 'PriestBot.ClassicPriest.v2.ico,0' in powershell
+    assert 'Remove-Item -LiteralPath $shortcut -Force' in powershell
     assert 'shell32.dll' not in powershell
-    assert (tmp_path / 'PriestBot.ico').is_file()
+    assert (tmp_path / 'PriestBot.ClassicPriest.v2.ico').is_file()

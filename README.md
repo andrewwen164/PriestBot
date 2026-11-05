@@ -1,3 +1,13 @@
+# PriestBot v0.23.3 — Windows Desktop Icon Cache Fix
+
+- Uses a **new versioned Classic Priest icon filename** (`PriestBot.ClassicPriest.v2.ico`) under `%LOCALAPPDATA%\PriestBot`, avoiding stale Windows Explorer icon caching.
+- Recreates the existing desktop shortcut and requests a shell icon refresh on successful updates or the **Recreate desktop shortcut** button.
+- If the old image persists, check for duplicate shortcuts or taskbar pins. Refresh the desktop and, for pinned taskbar icons, unpin then pin the updated desktop shortcut again.
+- This release changes no combat, telemetry, movement, recording, models, settings, or PriestBridge Lua code. No `/reload` needed.
+- To update: permanent desktop PriestBot → **Update from ZIP** → choose this ZIP → restart. Verify the shortcut points to `%LOCALAPPDATA%\PriestBot\PriestBot.ClassicPriest.v2.ico,0` under Windows shortcut Properties → Shortcut → Change Icon.
+
+---
+
 # PriestBot v0.23.2 — Action Semantics Binding Reliability
 
 **What changed:** PriestBridge now interleaves binding-catalog packets with gameplay events. Previously a continuous stream of spell/loot/target events could starve binding delivery for an entire recording, yielding `Resolved 0 bindings` and `Spell inputs: 0` despite confirmed spell casts. Action-bar bindings transmit first. This release also makes Lua binding enumeration safer when optional return values are nil, and adds `/pb bindings` diagnostics.
