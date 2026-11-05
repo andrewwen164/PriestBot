@@ -1,4 +1,42 @@
-# PriestBot v0.24.0 — Compact PriestBridge Telemetry (Live Validation Pending)
+# PriestBot v0.24.1 — Priest Healing Rotation (Live Validation Pending)
+
+This release tunes the **existing rule-based rotation** while preserving the
+v0.24.0 compact telemetry mode, learning/data collection, and safety gates.
+
+- **Heal / Lesser Heal:** cast when HP is **at or below 60%**, whether an enemy
+  is selected or the Priest is between pulls. The old between-pull 74% shortcut
+  is removed. Existing `config.json` files using the old default 45% value
+  migrate to 60%; other deliberately tuned thresholds are preserved. A 3.2s
+  fallback protects slow heal casts if the game's casting signal is missing.
+- **Renew:** optional *between-pull-only* healing at **below 80% HP**, no more
+  frequently than every 15 seconds, with at least 35% mana. It is never used
+  at 90–100% HP and never inserted into the combat damage loop. The interval
+  is a conservative time estimate, **not a verified Renew aura detector**.
+- **Power Word: Shield:** if enabled, consider it immediately before the next
+  pull (even at full HP), subject to the existing aura check, confirmed-cast
+  estimate, retry and 15-second Weakened Soul protection. Pre-pull use now
+  requires at least 50% mana to preserve resources for emergency healing.
+- **Priority between pulls:** casted Heal under 60% → mana recovery → Renew if
+  needed and enabled → Shield if needed and enabled → find next target. Buffs
+  are not repeatedly cast during respawn waits or unsuccessful target searches.
+- **New keybinding:** Renew defaults to `9` when available, with safe automatic
+  selection of a free key for older custom configurations. Verify that the
+  action-bar key self-casts before enabling the **Renew between pulls** checkbox.
+  Renew remains OFF by default to avoid sending an unverified input.
+- Casting in progress, F9 panic, foreground/dry-run protections, action-rate
+  limits, and model advisory-only restrictions remain unchanged.
+
+**Upgrade:** Permanent PriestBot desktop shortcut → **Update from ZIP** →
+select the complete v0.24.1 ZIP → restart. Because this also includes the
+v0.24.0 PriestBridge changes, install/repair the addon and `/reload` in-game.
+Test the Heal/Renew/Shield decisions in **dry-run** before enabling real keys.
+Actual WoW-client validation and the v0.23.2 binding test remain outstanding.
+
+---
+
+## Previous release notes
+
+### v0.24.0 — Compact PriestBridge Telemetry
 
 PriestBridge now has an optional **Compact Telemetry Mode**, designed to reduce
 screen obstruction while preserving the native StatusBars required for restricted

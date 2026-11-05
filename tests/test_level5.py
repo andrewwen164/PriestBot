@@ -17,7 +17,8 @@ def test_level5_rotation_pain_then_smite_repeat_and_low_mana_melee():
 def test_level5_lesser_heal_priority():
     e = PriestEngine(Config())
     assert e.update(Observation(.43, .85, 1), 0).action == "heal"
-    assert e.update(Observation(.85, .75, .9), 2).action == "pain"
+    assert e.update(Observation(.85, .75, .9), 2).action is None
+    assert e.update(Observation(.85, .75, .9), 3.2).action == "pain"
 
 
 def test_shield_off_by_default_on_at_level6():

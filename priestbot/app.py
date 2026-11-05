@@ -22,7 +22,7 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.24.0 - Farming Demonstrations")
+        root.title("PriestBot 0.24.1 - Farming Demonstrations")
         root.geometry("1010x1020")
         if sys.platform == "win32":
             try:
@@ -43,6 +43,7 @@ class App:
         self.shield = tk.BooleanVar(value=self.cfg.use_shield)
         self.pain = tk.BooleanVar(value=self.cfg.use_pain)
         self.heal = tk.BooleanVar(value=self.cfg.use_heal)
+        self.renew = tk.BooleanVar(value=self.cfg.use_renew)
         self.melee_oom = tk.BooleanVar(value=self.cfg.melee_when_oom)
         self.movement = tk.BooleanVar(value=self.cfg.enable_movement)
         self.processes = tk.StringVar(value=", ".join(self.cfg.allowed_processes))
@@ -163,9 +164,12 @@ class App:
         mode.bind("<<ComboboxSelected>>",lambda _: self.store_flags())
         ttk.Label(options,text="Mind Blast opener: Mind Blast → Pain → Shoot (wand)").pack(side="left",padx=(14,0))
         flags=ttk.Frame(frame); flags.pack(fill="x",pady=4)
-        for label,var in (("Shield",self.shield),("Shadow Word: Pain",self.pain),
-                          ("Lesser Heal",self.heal),("Melee when OOM",self.melee_oom)):
-            ttk.Checkbutton(flags,text=label,variable=var,command=self.store_flags).pack(side="left",padx=(0,14))
+        for index,(label,var) in enumerate((("Shield",self.shield),("Shadow Word: Pain",self.pain),
+                                            ("Heal / Lesser Heal (60% default)",self.heal),
+                                            ("Renew between pulls (<80% default)",self.renew),
+                                            ("Melee when OOM",self.melee_oom))):
+            ttk.Checkbutton(flags,text=label,variable=var,command=self.store_flags).grid(
+                row=index//3, column=index%3, sticky="w", padx=(0,18), pady=2)
         ttk.Checkbutton(frame, text="Experimental movement: short W steps for range errors; right turns for facing errors (OFF by default)",
                         variable=self.movement, command=self.store_flags).pack(anchor="w", pady=3)
         ttk.Checkbutton(frame,text="Enable real key presses (UNSAFE until bar detection is calibrated)",
@@ -200,6 +204,7 @@ class App:
         self.log("For addon telemetry, copy addons/PriestBridge to the game's Interface/AddOns folder, /reload, and select 'addon'.")
         self.log("Use F6 while WoW is visible to verify spell success, target and aura signals before running.")
         self.log("Set your spell/action bindings with Configure spell keys (default: 2=Heal, 3=Pain, 7=Wand, 8=Mind Blast).")
+        self.log("New healing policy: Heal at/below 60%, optional Renew below 80% between pulls, and Shield before pulls if enabled. Renew requires a verified self-cast key.")
         self.log("Updates keep config.json and .venv; use Update from ZIP after the first permanent install.")
         self.log("Background input is experimental. Use Test background Tab while a browser is focused; queued ≠ acted on.")
         self.log("Learning Mode records game-only screenshots while WoW has focus and telemetry decisions; no browser captures.")
@@ -334,7 +339,7 @@ class App:
             return
         window = tk.Toplevel(self.root)
         window.title("Spell and action key bindings")
-        window.geometry("530x565")
+        window.geometry("530x620")
         window.transient(self.root)
         window.grab_set()
         outer = ttk.Frame(window, padding=15)
@@ -350,7 +355,7 @@ class App:
             var = tk.StringVar(value=self.cfg.keys.get(action, ""))
             vars[action] = var
             ttk.Entry(grid, textvariable=var, width=14).grid(row=idx, column=1, sticky="w", padx=(10, 0), pady=4)
-        ttk.Label(outer, text="Tip: assign your heal key to a self-cast macro so it never heals your enemy target.",
+        ttk.Label(outer, text="Tip: bind Heal, Renew and Shield to self-cast macros so defensive spells never target enemies.",
                   wraplength=490).pack(anchor="w", pady=(14, 5))
         bottom = ttk.Frame(outer)
         bottom.pack(fill="x", side="bottom", pady=(10, 0))
@@ -386,6 +391,7 @@ class App:
         self.cfg.use_shield = self.shield.get()
         self.cfg.use_pain = self.pain.get()
         self.cfg.use_heal = self.heal.get()
+        self.cfg.use_renew = self.renew.get()
         self.cfg.melee_when_oom = self.melee_oom.get()
         self.cfg.enable_movement = self.movement.get()
         self.cfg.learning_record_gameplay = self.learn_record.get()

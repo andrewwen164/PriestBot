@@ -5,14 +5,15 @@ from priestbot.config import Config
 def test_combat_rotation_and_kill():
     c=Config(main_damage="wand", use_shield=True)
     e=PriestEngine(c)
-    assert e.update(Observation(1,.95,0),0).action=="next_target"
-    assert e.update(Observation(1,.95,1),2).action=="shield"
-    assert e.update(Observation(1,.80,1),4).action=="pain"
-    assert e.update(Observation(1,.70,.95),6).action=="wand"
+    assert e.update(Observation(1,.95,0),0).action=="shield"  # new pre-pull policy
+    assert e.update(Observation(1,.95,1),2).action=="pain"
+    assert e.update(Observation(1,.80,1),4).action=="wand"
+    assert e.update(Observation(1,.70,.95),6).action is None
     assert e.update(Observation(1,.70,.8),8).action is None
     assert e.update(Observation(.4,.70,.65),10).action=="heal"
-    assert e.update(Observation(.8,.60,.55),12).action=="wand"
-    assert e.update(Observation(.8,.60,0),14).action=="next_target"
+    assert e.update(Observation(.8,.60,.55),12).action is None
+    assert e.update(Observation(.8,.60,.55),13.3).action=="wand"
+    assert e.update(Observation(.8,.60,0),16).action=="next_target"
 
 
 def test_low_mana_rests_without_drinking():

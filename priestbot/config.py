@@ -21,10 +21,11 @@ class Config:
     player_health: Rect | None = None
     player_mana: Rect | None = None
     target_health: Rect | None = None
-    # Bind in game: 1 shield, 2 heal, 3 Pain, 4 Smite, 5 drink, 6 melee, 7 wand, 8 Mind Blast.
+    # Bind in game: 1 shield, 2 heal, 3 Pain, 4 Smite, 5 drink, 6 melee,
+    # 7 wand, 8 Mind Blast, 9 Renew. Renew is opt-in until its key is verified.
     keys: dict[str, str] = field(default_factory=lambda: {
         "shield": "1", "heal": "2", "pain": "3", "smite": "4",
-        "drink": "5", "melee": "6", "wand": "7", "mind_blast": "8",
+        "drink": "5", "melee": "6", "wand": "7", "mind_blast": "8", "renew": "9",
         "next_target": "tab", "clear_target": "esc",
         "move_forward": "w", "turn_right": "right"})
     # v0.16: opt-in, bounded motor movement (does not know enemy bearing).
@@ -40,6 +41,7 @@ class Config:
     use_shield: bool = False  # train at level 6
     use_pain: bool = True
     use_heal: bool = True
+    use_renew: bool = False  # opt-in: verify self-cast action-bar key first
     melee_when_oom: bool = True
     mind_blast_mana_min: float = 0.20  # skip MB opener if mana is too low
     mind_blast_cooldown_s: float = 8.0  # adjustable for Improved Mind Blast talent
@@ -49,10 +51,15 @@ class Config:
     smite_mana_min: float = 0.30  # don't spam Smite with almost no mana
     smite_interval_s: float = 2.7  # fallback if no successful-cast event is available
     smite_post_success_s: float = 0.20  # small margin after confirmed cast completion
-    heal_below: float = 0.45
+    heal_below: float = 0.60  # cast Heal/Lesser Heal only at or below 60% HP
+    heal_cast_fallback_s: float = 3.2  # protect slower Heal ranks if casting telemetry is unavailable
+    renew_below: float = 0.80  # between pulls only; never at 90-100% HP
+    renew_mana_min: float = 0.35
+    renew_interval_s: float = 15.0  # conservative HoT refresh/attempt spacing
     danger_below: float = 0.18
     heal_mana_min: float = 0.16
     shield_mana_min: float = 0.25
+    prepull_shield_mana_min: float = 0.50  # reserve mana for an emergency casted heal
     dot_mana_min: float = 0.34
     drink_below: float = 0.28
     resume_mana: float = 0.77
@@ -103,6 +110,11 @@ class Config:
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
         copy = dict(data)
+        # v0.24.1: installed config.json preserves the old default across ZIP
+        # upgrades. Migrate that default to the requested 60% while respecting
+        # explicitly customized thresholds other than 45%.
+        if copy.get('heal_below') == 0.45:
+            copy['heal_below'] = 0.60
         for key in ("player_health", "player_mana", "target_health"):
             if isinstance(copy.get(key), dict):
                 copy[key] = Rect(**copy[key])
@@ -118,6 +130,16 @@ class Config:
                     k for k in ("8", "9", "0", "q", "e", "r", "t", "y", "u", "b", "v", "f10", "f11", "f12")
                     if k not in occupied
                 )
+            # Add Renew without changing any of the user's existing bindings.
+            # Keep it opt-in: an unverified action-bar slot must not be pressed.
+            if "renew" not in original:
+                occupied = {str(v).strip().lower() for action, v in copy["keys"].items()
+                            if action != "renew"}
+                choice = next((k for k in ("9", "0", "r", "t", "y", "u", "b", "v", "f10", "f11", "f12",
+                                          "shift+9", "ctrl+9", "shift+r") if k not in occupied), None)
+                if choice is None:
+                    raise ValueError('No unused key for Renew; configure one before enabling it')
+                copy["keys"]["renew"] = choice
             # New movement keys must not silently collide with an existing
             # user's customized spell bindings. They are not used unless the
             # user explicitly opts into movement.
