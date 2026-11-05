@@ -1,4 +1,4 @@
 {
-  "version": "0.25.0",
-  "description": "Attended stationary farming: opt-in fleeing-mob turns, bounded no-chase line-of-sight waiting, and uploadable offline telemetry/decision diagnostic ZIP."
+  "version": "0.25.1",
+  "description": "Simplified PriestBot GUI with Farm, Record & Review, and Setup & Tools tabs; consolidated infrequent actions and preserved safety controls."
 }
