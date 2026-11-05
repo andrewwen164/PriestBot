@@ -53,50 +53,66 @@ def decode_bytes(raw: bytes) -> SemanticPacket | None:
     return SemanticPacket(seq, tokens[0], tuple(tokens[1:]), text)
 
 
-def decode_pixels(rgb: np.ndarray, x: int, y: int, scale: float) -> SemanticPacket | None:
+def decode_pixels(rgb: np.ndarray, x: int, y: int, scale: float,
+                  layout: str = 'normal') -> SemanticPacket | None:
     """Decode sidecar anchored to the *already verified* PriestBridge marker.
 
     x, y are image-local coordinates. The fixed 8x8 tile interiors are sampled
     away from edges to limit bilinear interpolation. Strict checksum rejects
     accidental UI overlays and old addons that have no sidecar.
     """
-    def pixel(px, py):
-        sx = x + round(px * scale)
-        sy = y + round(py * scale)
-        if sx < 0 or sy < 0 or sx >= rgb.shape[1] or sy >= rgb.shape[0]:
-            return None
-        return np.asarray(rgb[sy, sx, :3], dtype=np.int16)
+    columns = 16 if layout == 'compact' else 8
+    start_y = 18 if layout == 'compact' else 24
+    # The bridge sentinel can estimate fractional UI scale slightly high or
+    # low. At the far end of the 16-column compact packet that error can move
+    # samples into a tile edge. Try a tiny bounded scale correction; accept
+    # only a packet with matching magic, version, and full checksum.
+    for correction in (1, .995, .99, 1.005, 1.01, .985, 1.015, .98, 1.02):
+        candidate_scale = scale * correction
 
-    a = pixel(184, 4)
-    b = pixel(200, 4)
-    if a is None or b is None:
-        return None
-    if not (a[0] < 45 and 145 < a[1] < 235 and 45 < a[2] < 145
-            and 135 < b[0] < 235 and 65 < b[1] < 150 and b[2] < 45):
-        return None
-    raw = bytearray()
-    for i in range(TILE_COUNT):
-        col, row = i % 8, i // 8
-        px, py = 184 + col * 10, 24 + row * 10
-        # Sampling multiple interior pixels avoids texture-edge antialiasing.
-        samples = [pixel(px + dx, py + dy) for dx, dy in ((0, 0), (1, 0), (0, 1))]
-        if any(s is None for s in samples):
-            return None
-        color = np.median(np.asarray(samples), axis=0).astype(np.uint8)
-        raw.extend(int(v) for v in color)
-    return decode_bytes(bytes(raw))
+        def pixel(px, py):
+            sx = x + round(px * candidate_scale)
+            sy = y + round(py * candidate_scale)
+            if sx < 0 or sy < 0 or sx >= rgb.shape[1] or sy >= rgb.shape[0]:
+                return None
+            return np.asarray(rgb[sy, sx, :3], dtype=np.int16)
+
+        a = pixel(184, 4)
+        b = pixel(200, 4)
+        if a is None or b is None:
+            continue
+        if not (a[0] < 45 and 145 < a[1] < 235 and 45 < a[2] < 145
+                and 135 < b[0] < 235 and 65 < b[1] < 150 and b[2] < 45):
+            continue
+        raw = bytearray()
+        for i in range(TILE_COUNT):
+            col, row = i % columns, i // columns
+            px, py = 184 + col * 10, start_y + row * 10
+            # Median of inner pixels rejects edge antialiasing artifacts.
+            samples = [pixel(px + dx, py + dy) for dx, dy in ((0, 0), (1, 0), (0, 1))]
+            if any(s is None for s in samples):
+                break
+            color = np.median(np.asarray(samples), axis=0).astype(np.uint8)
+            raw.extend(int(v) for v in color)
+        if len(raw) != PACKET_SIZE:
+            continue
+        packet = decode_bytes(bytes(raw))
+        if packet is not None:
+            return packet
+    return None
 
 
 def monitor_semantics(sct, bridge_reading) -> SemanticPacket | None:
     """Grab a tiny window region. Failure never stops primary combat telemetry."""
     scale = bridge_reading.scale
     x, y = bridge_reading.marker_x, bridge_reading.marker_y
+    layout = getattr(bridge_reading, 'layout', 'normal')
     try:
         region = {"left": x, "top": y,
-                  "width": max(1, round(265 * scale)),
-                  "height": max(1, round(70 * scale))}
+                  "width": max(1, round((350 if layout == 'compact' else 265) * scale)),
+                  "height": max(1, round((48 if layout == 'compact' else 70) * scale))}
         shot = sct.grab(region)
         rgb = np.asarray(shot)[:, :, [2, 1, 0]]
-        return decode_pixels(rgb, 0, 0, scale)
+        return decode_pixels(rgb, 0, 0, scale, layout=layout)
     except (OSError, ValueError, IndexError, RuntimeError):
         return None

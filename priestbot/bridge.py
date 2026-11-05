@@ -23,6 +23,7 @@ class BridgeReading:
     marker_x: int
     marker_y: int
     scale: float
+    layout: str = 'normal'
 
 
 def _marker_pixel(rgb, x, y, color):
@@ -108,12 +109,13 @@ def _find_marker(rgb: np.ndarray):
     raise BridgeNotFound('Found colored pixels but no valid PriestBridge marker.')
 
 
-def _fraction(rgb: np.ndarray, x: int, top: int, scale: float, bar_y: int, kind: str):
+def _fraction(rgb: np.ndarray, x: int, top: int, scale: float, bar_y: int, kind: str,
+              compact: bool = False):
     width = round(160 * scale)
-    y = top + round((bar_y + 4) * scale)
+    y = top + round((bar_y + (1 if compact else 4)) * scale)
     # Check two internal rows. Using the fill interior avoids top/bottom anti-aliasing.
     samples = []
-    for dy in (0, max(1, round(3 * scale))):
+    for dy in (0, max(1, round((1 if compact else 3) * scale))):
         yy = y + dy
         if x < 0 or yy < 0 or yy >= rgb.shape[0] or x + width > rgb.shape[1]:
             raise BridgeNotFound('PriestBridge panel is partly off-screen.')
@@ -181,11 +183,11 @@ def _status(rgb: np.ndarray, x: int, y: int, scale: float):
 
 
 
-def _v08(rgb: np.ndarray, x: int, y: int, scale: float):
+def _v08(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int = 84):
     """Read appended v0.8 aura/success strip. Old addons return None fields."""
     def sample(px, size=8):
         sx = x + round((px + size/2) * scale)
-        sy = y + round((84 + 4) * scale)
+        sy = y + round((row_y + 4) * scale)
         if sx < 0 or sy < 0 or sy >= rgb.shape[0] or sx >= rgb.shape[1]:
             raise BridgeNotFound('PriestBridge v0.8 row clipped by screen')
         return tuple(int(v) for v in rgb[sy, sx, :3])
@@ -229,7 +231,7 @@ def _v08(rgb: np.ndarray, x: int, y: int, scale: float):
         value = 0
         for i, px in enumerate(xs):
             sx = x + round((px + 4) * scale)
-            sy = y + round(88 * scale)
+            sy = y + round((row_y + 4) * scale)
             radius = max(1, min(3, round(1.5 * scale)))
             if (sx - radius < 0 or sy - radius < 0 or
                     sx + radius >= rgb.shape[1] or sy + radius >= rgb.shape[0]):
@@ -253,14 +255,22 @@ def decode_bridge(rgb: np.ndarray) -> BridgeReading:
     if rgb.ndim != 3 or rgb.shape[2] < 3:
         raise ValueError('RGB image expected')
     x, y, scale = _find_marker(rgb)
-    hp = _fraction(rgb, x, y, scale, 20, 'health')
-    mana = _fraction(rgb, x, y, scale, 40, 'mana')
-    target_hp = _fraction(rgb, x, y, scale, 60, 'target')
+    # A unique compact-only marker guards against silently interpreting an
+    # incomplete/new layout as the normal protocol.
+    sx, sy = x + round(160 * scale), y + round(4 * scale)
+    compact = (0 <= sx < rgb.shape[1] and 0 <= sy < rgb.shape[0]
+               and 15 <= int(rgb[sy, sx, 0]) <= 70
+               and 185 <= int(rgb[sy, sx, 1]) <= 255
+               and 65 <= int(rgb[sy, sx, 2]) <= 145)
+    ys = (14, 21, 28) if compact else (20, 40, 60)
+    hp = _fraction(rgb, x, y, scale, ys[0], 'health', compact)
+    mana = _fraction(rgb, x, y, scale, ys[1], 'mana', compact)
+    target_hp = _fraction(rgb, x, y, scale, ys[2], 'target', compact)
     casting, err, seq = _status(rgb, x, y, scale)
-    shield,pain,success,success_seq,target_seq = _v08(rgb,x,y,scale)
+    shield,pain,success,success_seq,target_seq = _v08(rgb,x,y,scale,37 if compact else 84)
     obs = Observation(hp, mana, target_hp, casting, err, seq,
                       shield, pain, success, success_seq, target_seq)
-    return BridgeReading(obs, x, y, scale)
+    return BridgeReading(obs, x, y, scale, 'compact' if compact else 'normal')
 
 
 def monitor_bridge(sct) -> BridgeReading:
@@ -270,4 +280,5 @@ def monitor_bridge(sct) -> BridgeReading:
     reading = decode_bridge(arr)
     return BridgeReading(reading.observation,
                          reading.marker_x + desktop['left'],
-                         reading.marker_y + desktop['top'], reading.scale)
+                         reading.marker_y + desktop['top'], reading.scale,
+                         reading.layout)

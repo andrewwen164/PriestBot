@@ -30,5 +30,5 @@ def test_zip_members_compatible_with_prior_updater(tmp_path):
         for name in files:
             z.write(root / name, name)
     version, members = inspect_zip(zippath)
-    assert version == "0.23.3"
+    assert version == "0.24.0"
     assert set(members) == set(files)
