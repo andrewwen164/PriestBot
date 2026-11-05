@@ -22,8 +22,9 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.25.0 - Attended Farmer Diagnostics")
-        root.geometry("1010x1060")
+        root.title("PriestBot 0.25.1 - Attended Farmer")
+        root.geometry("945x840")
+        root.minsize(760, 700)
         if sys.platform == "win32":
             try:
                 from .icon_asset import create_priest_icon
@@ -98,35 +99,48 @@ class App:
             self.log("Shortcut icon refresh failed: " + str(exc))
 
     def build(self):
-        frame=ttk.Frame(self.root, padding=15)
+        frame=ttk.Frame(self.root, padding=12)
         frame.pack(fill="both",expand=True)
-        ttk.Label(frame, text="PriestBot — WoW private server",font=("Segoe UI",17,"bold")).pack(anchor="w")
-        ttk.Label(frame,text="F6: verify addon telemetry / F7: manual screenshot / F8: start or pause / F9: stop",
-                  font=("Segoe UI",10)).pack(anchor="w",pady=(2,13))
+        ttk.Label(frame, text="PriestBot — Attended Farmer",font=("Segoe UI",17,"bold")).pack(anchor="w")
+        ttk.Label(frame,text="F6 verify  ·  F7 calibrate  ·  F8 start/pause  ·  F9 emergency stop",
+                  font=("Segoe UI",10)).pack(anchor="w",pady=(2,8))
         ttk.Label(frame,textvariable=self.state_text,wraplength=770,
                   font=("Segoe UI",10,"bold")).pack(anchor="w",pady=4)
         ttk.Label(frame,textvariable=self.values_text).pack(anchor="w",pady=3)
-        dashboard=ttk.LabelFrame(frame,text="Live decision dashboard",padding=8)
+        dashboard=ttk.LabelFrame(frame,text="Live telemetry and decisions",padding=8)
         dashboard.pack(fill="x", pady=(5, 7))
         for variable in (self.aura_text,self.target_text,self.decision_text):
             ttk.Label(dashboard,textvariable=variable,wraplength=840).pack(anchor="w",pady=1)
-        row=ttk.Frame(frame);row.pack(fill="x",pady=9)
-        ttk.Button(row,text="Test addon (F6)",command=self.verify_addon).pack(side="left",padx=3)
-        ttk.Button(row,text="Manual calibration (F7)",command=self.capture).pack(side="left",padx=3)
+        # Primary actions remain visible, including emergency stop, on every tab.
+        row=ttk.Frame(frame);row.pack(fill="x",pady=(5,6))
         ttk.Button(row,text="Start / Pause (F8)",command=self.toggle).pack(side="left",padx=3)
         ttk.Button(row,text="PANIC STOP (F9)",command=self.panic).pack(side="left",padx=3)
-        ttk.Button(row,text="Configure spell keys",command=self.configure_keys).pack(side="left",padx=3)
-        ttk.Button(row,text="Show config.json",command=self.show_config).pack(side="left",padx=3)
-        updates = ttk.LabelFrame(frame, text="Installation & updates", padding=8)
+        ttk.Button(row,text="Verify addon (F6)",command=self.verify_addon).pack(side="left",padx=3)
+        ttk.Button(row,text="Export diagnostic ZIP",command=self.export_diagnostics).pack(side="left",padx=3)
+        ttk.Checkbutton(frame,text="Enable REAL key presses (OFF every launch; verify dry-run first)",
+                        variable=self.live,command=self.store_flags).pack(anchor="w",pady=(0,7))
+        tabs=ttk.Notebook(frame)
+        tabs.pack(fill="x",pady=(0,8))
+        farm=ttk.Frame(tabs,padding=11)
+        record=ttk.Frame(tabs,padding=11)
+        setup=ttk.Frame(tabs,padding=11)
+        tabs.add(farm,text="Farm")
+        tabs.add(record,text="Record & Review")
+        tabs.add(setup,text="Setup & Tools")
+        updates = ttk.LabelFrame(setup, text="Installation & updates", padding=8)
         updates.pack(fill="x", pady=(4, 5))
         for label, callback in (
             ("Update from ZIP...", self.update_from_zip),
             ("Install / repair PriestBridge", self.reinstall_addon),
-            ("Change WoW AddOns folder", self.change_addon_folder),
-            ("Recreate desktop shortcut", self.recreate_shortcut),
         ):
             ttk.Button(updates, text=label, command=callback).pack(side="left", padx=(0, 6))
-        learn_row = ttk.LabelFrame(frame, text="Learning Mode (record / demonstrate / evaluate)", padding=8)
+        self._command_menu(updates,"More maintenance ▾",(
+            ("Manual calibration (F7)",self.capture),
+            ("Change WoW AddOns folder",self.change_addon_folder),
+            ("Recreate desktop shortcut",self.recreate_shortcut),
+            ("Show config.json",self.show_config),
+        )).pack(side="left",padx=(0,6))
+        learn_row = ttk.LabelFrame(record, text="Demonstration capture", padding=8)
         learn_row.pack(fill="x", pady=(5, 5))
         for i, (label, value) in enumerate((("Record game telemetry/screenshots", self.learn_record),
                                             ("Record manual movement corrections", self.learn_corrections),
@@ -135,90 +149,88 @@ class App:
                                             ("Auto-train candidates after sessions", self.learn_auto))):
             ttk.Checkbutton(learn_row, text=label, variable=value, command=self.store_flags).grid(
                 row=i // 2, column=i % 2, sticky="w", padx=(0, 12), pady=2)
-        learn_buttons = ttk.Frame(frame)
-        learn_buttons.pack(fill="x", pady=(1, 4))
-        for label, callback in (("Start/stop demonstration", self.toggle_demonstration),
-                                ("Demonstration keys", self.configure_demo_keys),
-                                ("Pause / resume input logging", self.pause_demo_input),
-                                ("Train candidate now", self.train_now),
-                                ("Evaluation dashboard", self.view_evaluation),
-                                ("Data coverage", self.view_coverage),
-                                ("Approve advisory", self.approve_advisory),
-                                ("Open learning data", self.open_learning_data)):
-            ttk.Button(learn_buttons,text=label,command=callback).pack(side="left", padx=(0, 6))
-        vision_buttons=ttk.Frame(frame); vision_buttons.pack(fill="x",pady=(0,4))
-        for label, callback in (("Train temporal vision", self.train_temporal),
-                                ("Vision evaluation / coverage", self.view_vision)):
-            ttk.Button(vision_buttons,text=label,command=callback).pack(side="left",padx=(0,8))
-        ttk.Label(vision_buttons,text="3-frame RGB + simultaneous keys/mouse; GPU optional; candidate-only").pack(side="left")
-        ttk.Button(frame, text="Export diagnostic report (ZIP to upload into chat)",
-                   command=self.export_diagnostics).pack(anchor="w", pady=(2, 4))
-        ttk.Button(learn_row, text="Action semantics — bindings and confirmed uses",
-                   command=self.view_semantics).grid(row=3, column=0, columnspan=2,
-                                                      sticky="w", pady=(6,0))
-        ttk.Button(learn_row, text="Farming demonstrations — targets / spells / loot",
-                   command=self.view_farming).grid(row=4, column=0, columnspan=2,
-                                                     sticky="w", pady=(4,0))
-        options=ttk.Frame(frame); options.pack(fill="x",pady=(10,0))
+        learn_buttons = ttk.Frame(record)
+        learn_buttons.pack(fill="x", pady=(3, 8), before=learn_row)
+        ttk.Button(learn_buttons,text="Start / Stop demonstration",
+                   command=self.toggle_demonstration).pack(side="left",padx=(0,8))
+        ttk.Button(learn_buttons,text="Pause / Resume input logging",
+                   command=self.pause_demo_input).pack(side="left",padx=(0,8))
+        self._command_menu(learn_buttons,"Review data ▾",(
+            ("Farming: targets, spells and loot",self.view_farming),
+            ("Action semantics / bindings",self.view_semantics),
+            ("Evaluation dashboard",self.view_evaluation),
+            ("Data coverage",self.view_coverage),
+            ("Vision evaluation / coverage",self.view_vision),
+            ("Open learning-data folder",self.open_learning_data),
+        )).pack(side="left")
+        vision_buttons=ttk.Frame(record); vision_buttons.pack(fill="x",pady=(0,4))
+        self._command_menu(vision_buttons,"Training tools ▾",(
+            ("Demonstration keys",self.configure_demo_keys),
+            ("Train candidate now",self.train_now),
+            ("Train temporal vision",self.train_temporal),
+            ("Approve advisory (read-only)",self.approve_advisory),
+        )).pack(side="left",padx=(0,8))
+        ttk.Label(vision_buttons,text="Training models are advisory-only; GPU optional.").pack(side="left")
+        options=ttk.Frame(farm); options.pack(fill="x",pady=(1,6))
         ttk.Label(options,text="Main damage spell:").pack(side="left",padx=(0,8))
         mode=ttk.Combobox(options,textvariable=self.damage_mode,values=["smite", "wand", "mind_blast_wand", "melee"],
                           state="readonly",width=19)
         mode.pack(side="left")
         mode.bind("<<ComboboxSelected>>",lambda _: self.store_flags())
-        ttk.Label(options,text="Mind Blast opener: Mind Blast → Pain → Shoot (wand)").pack(side="left",padx=(14,0))
-        flags=ttk.Frame(frame); flags.pack(fill="x",pady=4)
+        ttk.Button(options,text="Spell key bindings...",command=self.configure_keys).pack(side="left",padx=(14,0))
+        flags=ttk.LabelFrame(farm,text="Rotation",padding=7); flags.pack(fill="x",pady=(0,6))
         for index,(label,var) in enumerate((("Shield",self.shield),("Shadow Word: Pain",self.pain),
                                             ("Heal / Lesser Heal (60% default)",self.heal),
                                             ("Renew between pulls (<80% default)",self.renew),
-                                            ("Melee when OOM",self.melee_oom))):
+                                            ("Melee when OOM",self.melee_oom),
+                                            ("Drink between pulls",self.drink))):
             ttk.Checkbutton(flags,text=label,variable=var,command=self.store_flags).grid(
                 row=index//3, column=index%3, sticky="w", padx=(0,18), pady=2)
-        ttk.Checkbutton(frame, text="Experimental movement: short W steps for range errors; right turns for facing errors (OFF by default)",
-                        variable=self.movement, command=self.store_flags).pack(anchor="w", pady=3)
-        ttk.Checkbutton(frame, text="Stationary fleeing-mob tracking: turn only on confirmed facing errors, wait for LoS, NEVER chase (OFF until dry-run verified)",
+        ttk.Checkbutton(setup, text="Experimental walking/turning on range errors (not for stationary farming)",
+                        variable=self.movement, command=self.store_flags).pack(anchor="w", pady=4)
+        ttk.Checkbutton(farm, text="Track fleeing mobs: bounded turns and LoS waits (never chase)",
                         variable=self.stationary_tracking, command=self.store_flags).pack(anchor="w", pady=3)
-        ttk.Checkbutton(frame,text="Enable real key presses (UNSAFE until bar detection is calibrated)",
-                        variable=self.live,command=self.store_flags).pack(anchor="w",pady=7)
-        ttk.Checkbutton(frame,text="Allow drinking when mana is low (requires drink macro on key 5)",
-                        variable=self.drink,command=self.store_flags).pack(anchor="w",pady=3)
-        source_row = ttk.Frame(frame); source_row.pack(fill="x", pady=(8, 4))
+        source_row = ttk.Frame(setup); source_row.pack(fill="x", pady=(8, 4))
         ttk.Label(source_row, text="Telemetry source:").pack(side="left", padx=(0, 8))
         source = ttk.Combobox(source_row, textvariable=self.telemetry_source,
                               values=["manual", "addon"], state="readonly", width=12)
         source.pack(side="left")
         source.bind("<<ComboboxSelected>>", lambda _: self.store_flags())
         ttk.Label(source_row, text="addon = fixed screen telemetry; keep game visible").pack(side="left", padx=(10, 0))
-        input_row=ttk.Frame(frame); input_row.pack(fill="x", pady=(4, 6))
+        input_row=ttk.Frame(farm); input_row.pack(fill="x", pady=(4, 6))
         ttk.Label(input_row, text="Input method:").pack(side="left",padx=(0,8))
         input_combo = ttk.Combobox(input_row,textvariable=self.input_mode,
                                    values=["foreground", "background"],state="readonly",width=16)
         input_combo.pack(side="left")
         input_combo.bind("<<ComboboxSelected>>",lambda _:self.store_flags())
-        ttk.Label(input_row,text="background = experimental PostMessage to visible WoW; no focus stealing").pack(side="left",padx=10)
-        ttk.Button(input_row,text="Test background Tab (5s)",command=self.test_background_tab).pack(side="right",padx=5)
-        row2=ttk.Frame(frame);row2.pack(fill="x",pady=8)
+        ttk.Label(input_row,text="background = experimental; WoW must stay visible").pack(side="left",padx=10)
+        ttk.Button(setup,text="Test background Tab (5s)",command=self.test_background_tab).pack(anchor="w",pady=(3,7))
+        row2=ttk.Frame(setup);row2.pack(fill="x",pady=8)
         ttk.Label(row2,text="Allowed game .exe names:").pack(side="left")
         ttk.Entry(row2,textvariable=self.processes,width=65).pack(side="left",padx=7,fill="x",expand=True)
         ttk.Button(row2,text="Save",command=self.store_flags).pack(side="left")
-        ttk.Label(frame,textvariable=self.calibration_text,wraplength=770).pack(anchor="w",pady=5)
+        ttk.Label(setup,textvariable=self.calibration_text,wraplength=850).pack(anchor="w",pady=5)
         ttk.Separator(frame).pack(fill="x",pady=8)
         ttk.Label(frame,text="Activity log",font=("Segoe UI",10,"bold")).pack(anchor="w")
-        self.log_area=tk.Text(frame,height=15,width=100,state="disabled",font=("Consolas",9))
+        self.log_area=tk.Text(frame,height=10,width=100,state="disabled",font=("Consolas",9))
         self.log_area.pack(fill="both",expand=True)
-        self.log("Starts in DRY RUN mode: displays intended actions but never sends keys.")
-        self.log("For addon telemetry, copy addons/PriestBridge to the game's Interface/AddOns folder, /reload, and select 'addon'.")
-        self.log("Use F6 while WoW is visible to verify spell success, target and aura signals before running.")
-        self.log("Set your spell/action bindings with Configure spell keys (default: 2=Heal, 3=Pain, 7=Wand, 8=Mind Blast).")
-        self.log("New healing policy: Heal at/below 60%, optional Renew below 80% between pulls, and Shield before pulls if enabled. Renew requires a verified self-cast key.")
-        self.log("Updates keep config.json and .venv; use Update from ZIP after the first permanent install.")
-        self.log("Background input is experimental. Use Test background Tab while a browser is focused; queued ≠ acted on.")
-        self.log("Learning Mode records game-only screenshots while WoW has focus and telemetry decisions; no browser captures.")
-        self.log("Demonstration: pause bot, record all game-focused keys/mouse; chat guarded, manual privacy pause for text boxes.")
-        self.log("Learning models are advisory only. No trained model controls movement or spells in this release.")
-        self.log("v0.25: Export a synthetic offline diagnostics ZIP anytime. Optional live optical read never captures screenshots to disk.")
-        self.log("Stationary tracking is OFF by default; enable only after examining dry-run outcomes. No LoS pursuit.")
-        self.log("v0.23: Training examples now include target selection, spell events and looting evidence (new PriestBridge addon required).")
-        self.log("PyTorch is optional for the CNN. See README for installing it in your permanent .venv.")
+        self.log("DRY RUN starts ON; no keys are sent until you explicitly enable real input.")
+        self.log("Farm: rotation, spell keys, stationary tracking. Record & Review: demonstrations and learning.")
+        self.log("Setup & Tools: addon installation, calibration, maintenance, advanced movement.")
+        self.log("F6 verifies PriestBridge. Export diagnostic ZIP to share test results in PriestBot Chat 2.")
+        self.log("Healing: casted Heal ≤60%; optional Renew <80% between pulls; pre-pull Shield when enabled.")
+        self.log("Stationary target tracking is opt-in. No blind pursuit of fleeing mobs.")
+        self.log("Learning models remain advisory-only; no model controls game inputs.")
+
+    @staticmethod
+    def _command_menu(parent, label, actions):
+        """Keep infrequent tools accessible without cluttering the main view."""
+        button = ttk.Menubutton(parent, text=label)
+        menu = tk.Menu(button, tearoff=False)
+        for title, callback in actions:
+            menu.add_command(label=title, command=callback)
+        button.configure(menu=menu)
+        return button
 
     def _is_permanent_install(self):
         from .install_core import installed_dir, SETTINGS_FILENAME

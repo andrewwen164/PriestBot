@@ -1,3 +1,36 @@
+# PriestBot v0.25.1 — Streamlined Attended Farmer UI
+
+The desktop window is now organized into **Farm**, **Record & Review**, and
+**Setup & Tools** tabs. Core actions remain visible above the tabs at all
+times: **Start/Pause (F8)**, **PANIC STOP (F9)**, **Verify addon (F6)**, and
+**Export diagnostic ZIP**. The real-input checkbox remains prominent and OFF
+each launch. F7 manual calibration is still available from the keyboard.
+
+- **Farm:** main damage mode, spell bindings, Shield/Pain/Heal/Renew, melee,
+  drinking, stationary fleeing-mob tracking, and input method.
+- **Record & Review:** demonstration Start/Stop and input privacy pause.
+  **Review data** combines the farming, action semantics, learning, and vision
+  viewers; **Training tools** combines key configuration, candidate training,
+  temporal vision, and read-only advisory approval. Recording switches remain
+  available as before.
+- **Setup & Tools:** ZIP upgrades, addon repair, source selection, game process
+  list, background-input test, experimental walking, and a **More maintenance**
+  menu for calibration, addon-folder changes, shortcut repair, and config.json.
+- Shorter startup log and smaller window; no existing behavior, user settings,
+  training files, or keybindings were intentionally removed or reset.
+
+**Upgrade:** From the installed PriestBot shortcut, use **Update from ZIP** and
+select the complete v0.25.1 release. The updater retains local state and
+virtual environment. PriestBridge Lua is unchanged from v0.25.0; if that
+version was already installed, no additional `/reload` is needed.
+
+All offline GUI logic, decision, and telemetry tests still require **real
+Windows GUI/live-WoW validation** before relying on unattended actions.
+
+---
+
+## Previous release notes
+
 # PriestBot v0.25.0 — Attended Farmer Diagnostics (Live Validation Pending)
 
 **Purpose:** assisted stationary farming in an open area while the owner
