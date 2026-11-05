@@ -22,7 +22,7 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.23.1 - Farming Demonstrations")
+        root.title("PriestBot 0.23.2 - Farming Demonstrations")
         root.geometry("1010x1020")
         self.cfg = Config.load()
         # Never inherit LIVE INPUT from an older copied config.json at startup.
@@ -836,6 +836,31 @@ class App:
             f"Resolved {len(report.get('bindings',[]))} bindings. "
             f"Outcomes: {report.get('counts',{})}"), wraplength=900)
         summary.pack(anchor='w', padx=10, pady=9)
+        if not report.get('bindings'):
+            kinds=report.get('packet_types') or {}
+            expected=report.get('declared_bindings')
+            if not kinds:
+                diagnostic=('Binding packet diagnostics were not saved in this older recording. '
+                            'Install the updated PriestBridge, run /pb bindings outside combat, '
+                            'and record a new 1-minute demonstration.')
+            elif expected==0:
+                diagnostic=('PriestBridge reported zero enumerated bindings. '
+                            'Run /pb bindings outside combat and inspect GetNumBindings().')
+            elif kinds.get('B',0)==0:
+                diagnostic=(f"No binding (B) packets received. Addon declared {expected if expected is not None else 'unknown'} bindings. "
+                            'The upgraded addon interleaves binding packets with gameplay events; '
+                            'run /pb bindings and verify the new addon is installed.')
+            else:
+                diagnostic=(f"Received {kinds.get('B',0)} binding packets but none mapped. "
+                            'Inspect generation, packet decoding and key notation.')
+            ttk.Label(win, text=diagnostic, foreground='#ac4b18',
+                      wraplength=890).pack(anchor='w',padx=10,pady=(0,8))
+        kinds=report.get('packet_types') or {}
+        if kinds:
+            ttk.Label(win, text=(f"Packet types: {dict(sorted(kinds.items()))} · "
+                f"Declared bindings: {report.get('declared_bindings')} · "
+                f"Binding records: {report.get('binding_records_seen',0)}"),
+                wraplength=890).pack(anchor='w',padx=10,pady=(0,7))
         notebook = ttk.Notebook(win)
         notebook.pack(fill='both', expand=True, padx=10, pady=8)
         for name, cols, rows in (

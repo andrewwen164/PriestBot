@@ -1,3 +1,15 @@
+# PriestBot v0.23.2 — Action Semantics Binding Reliability
+
+**What changed:** PriestBridge now interleaves binding-catalog packets with gameplay events. Previously a continuous stream of spell/loot/target events could starve binding delivery for an entire recording, yielding `Resolved 0 bindings` and `Spell inputs: 0` despite confirmed spell casts. Action-bar bindings transmit first. This release also makes Lua binding enumeration safer when optional return values are nil, and adds `/pb bindings` diagnostics.
+
+The desktop **Action Semantics** report now shows packet-type counts, declared bindings and binding packets received, plus a specific warning when zero bindings are resolved. The rule-based Priest rotation, movement, computer vision and learning/evaluation protections are unchanged. This upgrade does **not** retroactively invent labels for older demonstrations; existing recordings remain preserved for later analysis.
+
+**How to update:** Use PriestBot desktop shortcut → Update from ZIP → select v0.23.2 → allow PriestBridge addon update, then `/reload` in WoW. Run `/pb bindings` outside combat and check `resolved` is above zero and `transmitted` increases. With WoW focused, record a new ~60-second demonstration: press two spell bindings and loot one corpse. Open Action Semantics to confirm resolved bindings and `B` packets. Open Farming Demonstrations and confirm `rotation_input` is now nonzero (subject to recorded bindings). If the catalog still reads zero, send `/pb bindings` output and new report packet-type counts.
+
+**Testing:** Python regression suite and mock Lua frame tests; actual WoW client validation pending. The `R/B` optical packets remain read-only. `unknown`/`unmatched` means insufficient evidence, not a verified successful action. User recordings, settings and `.venv` remain untouched by the updater.
+
+---
+
 # PriestBot v0.23.1 — Classic Priest Desktop Icon + GitHub Source
 
 - The permanent Windows desktop shortcut now uses the **Classic Priest class icon** (`classicon_priest`) instead of a generic Windows system icon.

@@ -371,7 +371,7 @@ SlashCmdList.PRIESTBRIDGE = function(msg)
     elseif msg == 'test target' then newTarget()
     elseif msg == 'auras' then evaluateAuras(); print('PriestBridge aura status: shield='..shieldState..', pain='..painState..' (estimated=cast timer; unknown=unreadable)')
     else
-        print('PriestBridge v0.23: /pb show|hide|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
+        print('PriestBridge v0.23.2: /pb show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
     end
 end
 
@@ -401,6 +401,8 @@ local semRepeat=0
 local semLastScan=0
 local semDirty=true
 local semFingerprint=nil
+local semEventStreak=0
+local semBindingsSent=0
 local function safeText(v)
     if type(v)~='string' and type(v)~='number' then return '' end
     if issecretvalue and issecretvalue(v) then return '' end
@@ -491,14 +493,19 @@ local function rebuildSemBindings()
         if ok and combat then return end
     end
     local rows={}
+    -- GetBinding(i) returns command, primary-key, secondary-key.
+    -- pcall adds a leading success flag: r[2]=command, r[3]=primary,
+    -- r[4]=secondary. The old j=4 loop discarded almost all bindings.
+    -- Preserve returned count even when the secondary key is nil.
+    local function pack(...) return {n=select('#',...), ...} end
     if type(GetNumBindings)=='function' and type(GetBinding)=='function' then
         local ok,count=pcall(GetNumBindings)
         if ok and type(count)=='number' then
             for i=1,math.min(count,350) do
-                local r={pcall(GetBinding,i)}
+                local r=pack(pcall(GetBinding,i))
                 if r[1] and type(r[2])=='string' then
                     local cmd=r[2]
-                    for j=4,#r do
+                    for j=3,r.n do
                         local key=safeText(r[j])
                         if key~='' then
                             local kind,id,name=resolveCommand(cmd)
@@ -509,7 +516,23 @@ local function rebuildSemBindings()
             end
         end
     end
-    table.sort(rows)
+    -- Transmit action-bar bindings first. Spell/item recordings depend on these,
+    -- while movement, chat and interface shortcuts can follow later.
+    local function priority(row)
+        local _,cmd=string.match(row,'^([^|]+)|([^|]+)|')
+        cmd=cmd or ''
+        if string.match(cmd,'^ACTIONBUTTON') or string.match(cmd,'^MULTIACTIONBAR') then return 0 end
+        if string.match(cmd,'^CLICK ') then return 1 end
+        if string.find(cmd,'TARGET',1,true) or string.find(cmd,'INTERACT',1,true) then return 2 end
+        if string.find(cmd,'MOVE',1,true) or string.find(cmd,'STRAFE',1,true)
+           or string.find(cmd,'TURN',1,true) then return 3 end
+        return 4
+    end
+    table.sort(rows,function(a,b)
+        local pa,pb=priority(a),priority(b)
+        if pa~=pb then return pa<pb end
+        return a<b
+    end)
     semDirty=false
     local fingerprint=table.concat(rows,'\n')
     if fingerprint==semFingerprint then return end
@@ -518,6 +541,8 @@ local function rebuildSemBindings()
     for i,msg in ipairs(rows) do rows[i]='B|'..semGeneration..'|'..msg end
     semBindings=rows
     semBindingIndex=1
+    semBindingsSent=0
+    semEventStreak=0
     emitSem('R|'..semGeneration..'|'..#rows)
 end
 local function semanticEvent(event, ...)
@@ -643,17 +668,53 @@ SEM:SetScript('OnUpdate',function(_,dt)
         pcall(rebuildSemBindings)
     end
     if not semCurrent or semRepeat<=0 then
-        local isEvent = #semEvents>0
-        if isEvent then
-            semCurrent=table.remove(semEvents,1)
-        elseif #semBindings>0 then
+        local haveEvents = #semEvents>0
+        local haveBindings = #semBindings>0
+        -- The old event-first FIFO could *starve binding packets indefinitely*
+        -- during a busy farming demonstration (casts, target switches, looting).
+        -- Interleave the catalog and game events. For the first 24 bindings,
+        -- alternate; afterward reserve every third packet for a binding.
+        local warmingUp = semBindingsSent<math.min(#semBindings,24)
+        local sendBinding = haveBindings and (not haveEvents or
+            semEventStreak >= (warmingUp and 1 or 2))
+        if sendBinding then
             semCurrent=semBindings[semBindingIndex]
             semBindingIndex=semBindingIndex%#semBindings+1
+            semBindingsSent=semBindingsSent+1
+            semEventStreak=0
+            semRepeat=3
+        elseif haveEvents then
+            semCurrent=table.remove(semEvents,1)
+            semEventStreak=semEventStreak+1
+            semRepeat=4
         else
             semCurrent='P|0'
+            semRepeat=3
         end
         encodedPacket(semCurrent)
-        semRepeat=isEvent and 4 or 3
     end
     semRepeat=semRepeat-1
 end)
+
+-- Client-side diagnostics: no server access and no gameplay automation.
+-- Run /pb bindings *out of combat* to inspect enumeration and packet backlog.
+local previousPriestBridgeSlash = SlashCmdList.PRIESTBRIDGE
+SlashCmdList.PRIESTBRIDGE=function(msg)
+    if msg=='bindings' then
+        local count=0
+        if type(GetNumBindings)=='function' then
+            local ok,n=pcall(GetNumBindings)
+            if ok and type(n)=='number' then count=n end
+        end
+        print('PriestBridge bindings: API entries='..count..', resolved='..#semBindings..
+              ', generation='..semGeneration..', transmitted='..semBindingsSent..
+              ', queued events='..#semEvents)
+        if #semBindings==0 then
+            print('PriestBridge: no bindings were enumerated. Try /reload outside combat.')
+        else
+            print('PriestBridge next record: '..semBindings[semBindingIndex])
+        end
+    else
+        previousPriestBridgeSlash(msg)
+    end
+end

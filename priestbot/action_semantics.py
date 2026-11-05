@@ -52,6 +52,9 @@ class ActionSemanticTracker:
         self.recent = deque(maxlen=80)
         self.counts = Counter()
         self.packets = 0
+        self.packet_types = Counter()
+        self.declared_bindings = None
+        self.binding_records_seen = 0
         self.last_seen = None
         self.packet_errors = 0
 
@@ -154,6 +157,7 @@ class ActionSemanticTracker:
         self.last_sequence = packet.sequence
         self.last_seen = mono
         self.packets += 1
+        self.packet_types[packet.kind] += 1
         fields = packet.fields
         kind = packet.kind
         if kind == 'R' and len(fields)>=1:
@@ -161,13 +165,19 @@ class ActionSemanticTracker:
                 generation = int(fields[0])
             except ValueError:
                 return
+            if len(fields)>1:
+                try:
+                    self.declared_bindings = int(fields[1])
+                except (ValueError, TypeError):
+                    pass
             if generation != self.generation:
                 self.generation = generation
                 self.bindings.clear()
                 self._log('binding_snapshot', generation=generation,
-                          declared_bindings=fields[1] if len(fields)>1 else None)
+                          declared_bindings=self.declared_bindings)
             return
         if kind == 'B' and len(fields)>=6:
+            self.binding_records_seen += 1
             try:
                 generation = int(fields[0]); key = fields[1].upper()
                 ident = int(fields[4])
@@ -242,6 +252,9 @@ class ActionSemanticTracker:
                              for b in sorted(self.bindings.values(),key=lambda b:b.key)],
                 'recent':list(self.recent), 'counts':dict(self.counts),
                 'generation':self.generation, 'packets':self.packets,
+                'packet_types':dict(self.packet_types),
+                'declared_bindings':self.declared_bindings,
+                'binding_records_seen':self.binding_records_seen,
                 'protocol':'PriestBridge semantic v1',
                 'limitations':'Macro branches and unobserved food/bandage auras remain unknown; '
                               'item-use hook is an attempt, not confirmation.'}
