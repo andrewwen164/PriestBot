@@ -114,7 +114,8 @@ assert(seen['B|1|SHIFT-G|MULTIACTIONBAR1BUTTON7|macro|9|Bandage > Heavy Linen Ba
 SlashCmdList.PRIESTBRIDGE('compact')
 assert(PriestBridgeSettings.compact == true)
 assert(PriestBridgeFrame.w == 350 and PriestBridgeFrame.h == 48)
-assert(PriestBridgeFrame.point[1]=='TOPRIGHT')
+assert(PriestBridgeFrame.point[1]=='BOTTOMRIGHT')
+assert(PriestBridgeFrame.point[4]==-12 and PriestBridgeFrame.point[5]==12)
 local compactBars = 0
 for _,frame in ipairs(frames) do
   if frame.kind=='StatusBar' then
@@ -123,6 +124,28 @@ for _,frame in ipairs(frames) do
   end
 end
 assert(compactBars==3)
+SlashCmdList.PRIESTBRIDGE('top')
+assert(PriestBridgeSettings.compactAnchor == 'TOPRIGHT')
+assert(PriestBridgeFrame.point[1]=='TOPRIGHT')
+SlashCmdList.PRIESTBRIDGE('bottom')
+assert(PriestBridgeSettings.compactAnchor == 'BOTTOMRIGHT')
+assert(PriestBridgeFrame.point[1]=='BOTTOMRIGHT')
+-- Existing saved top preference survives reload; older saved settings without
+-- an anchor migrate to bottom-right without needing user intervention.
+local layoutLoader
+for _,frame in ipairs(frames) do
+  if frame.kind=='Frame' and frame.OnEvent and not frame.OnUpdate then
+    layoutLoader=frame
+  end
+end
+assert(layoutLoader,'layout settings loader missing')
+PriestBridgeSettings.compact=true
+PriestBridgeSettings.compactAnchor='TOPRIGHT'
+layoutLoader.OnEvent(layoutLoader,'ADDON_LOADED','PriestBridge')
+assert(PriestBridgeFrame.point[1]=='TOPRIGHT')
+PriestBridgeSettings={compact=true}
+layoutLoader.OnEvent(layoutLoader,'ADDON_LOADED','PriestBridge')
+assert(PriestBridgeFrame.point[1]=='BOTTOMRIGHT')
 SlashCmdList.PRIESTBRIDGE('normal')
 assert(PriestBridgeSettings.compact == false)
 assert(PriestBridgeFrame.w == 270 and PriestBridgeFrame.h == 102)

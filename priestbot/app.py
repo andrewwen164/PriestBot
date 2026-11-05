@@ -22,7 +22,7 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.25.1 - Attended Farmer")
+        root.title("PriestBot 0.25.2 - Attended Farmer")
         root.geometry("945x840")
         root.minsize(760, 700)
         if sys.platform == "win32":

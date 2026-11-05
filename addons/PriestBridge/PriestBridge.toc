@@ -1,7 +1,7 @@
 ## Interface: 16001
-## Title: PriestBridge v0.24 (private test clients)
+## Title: PriestBridge v0.25.2 (private test clients)
 ## Notes: Visual status-bar and spell-event telemetry for a permitted private client. No game input.
 ## Author: Priest Foreground Farmer Project
-## Version: 0.24.0
+## Version: 0.25.2
 ## SavedVariables: PriestBridgeSettings
 PriestBridge.lua

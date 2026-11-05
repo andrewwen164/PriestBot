@@ -1,3 +1,36 @@
+# PriestBot v0.25.2 — Compact Telemetry at Bottom-Right
+
+The compact PriestBridge strip now defaults to the **bottom-right corner**,
+keeping raid buffs and other upper-right HUD elements visible. The optical
+packet structure and 350 × 48 UI-unit dimensions are unchanged; no new
+screen-coordinate calibration is needed.
+
+- `/pb compact`: enable the compact strip, now bottom-right by default.
+- `/pb bottom`: force compact mode at bottom-right (12 UI units inward).
+- `/pb top`: move compact mode to the old top-right position.
+- `/pb normal`: restore the legacy full-size upper-left panel.
+
+The selected compact corner is saved across reloads. Existing installations
+with the old `compact=true` setting but no recorded corner automatically move
+to bottom-right when the updated addon loads. Explicit top-right preferences
+are preserved. The compact pixels must still remain visible and unobstructed
+for read-only screenshot decoding; do not hide or alpha-fade them.
+
+**Upgrade:** PriestBot → **Setup & Tools** → **Update from ZIP** → v0.25.2.
+If the addon repair did not finish automatically, click **Install / repair
+PriestBridge**. In WoW, type `/reload` and `/pb bottom`. Keep real game inputs
+disabled until F6 confirms the bridge and action telemetry. This is an addon
+placement-only change, not a new rotation or model.
+
+**Offline verification:** native Lua mock checks both anchors, settings
+restore, and the normal-mode return path. Synthetic screenshot tests check
+that bottom-right telemetry decoding remains position-independent. Actual
+WoW-client UI scaling and integration still need live validation.
+
+---
+
+## Previous release notes
+
 # PriestBot v0.25.1 — Streamlined Attended Farmer UI
 
 The desktop window is now organized into **Farm**, **Record & Review**, and

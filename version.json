@@ -1,4 +1,4 @@
 {
-  "version": "0.25.1",
-  "description": "Simplified PriestBot GUI with Farm, Record & Review, and Setup & Tools tabs; consolidated infrequent actions and preserved safety controls."
+  "version": "0.25.2",
+  "description": "Compact PriestBridge telemetry defaults to bottom-right, with saved /pb top and /pb bottom positioning; all previous attended-farmer and UI features included."
 }
