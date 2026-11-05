@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+.pytest_cache/
+config.json
+*.pyc
+learning_data/
+
+# Per-user runtime state: never commit gameplay or private settings
+install_settings.json
+last_update_status.json
+update.log
+*.log
+backups/
+models/
+model_candidates/
+*.tmp
+*.updating
+PriestBot.ico
+.DS_Store
