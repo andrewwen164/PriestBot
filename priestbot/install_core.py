@@ -22,7 +22,7 @@ APP_NAME = "PriestBot"
 DEFAULT_WOW_ADDONS = r"C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns"
 SETTINGS_FILENAME = "install_settings.json"
 STATUS_FILENAME = "last_update_status.json"
-APP_VERSION = "0.24.1"
+APP_VERSION = "0.25.0"
 REQUIRED = {
     "launch.py", "requirements.txt", "run_windows.bat",
     "priestbot/__init__.py", "priestbot/app.py", "priestbot/install_core.py",

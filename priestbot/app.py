@@ -22,8 +22,8 @@ from .keybindings import ACTION_LABELS, validate_bindings
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("PriestBot 0.24.1 - Farming Demonstrations")
-        root.geometry("1010x1020")
+        root.title("PriestBot 0.25.0 - Attended Farmer Diagnostics")
+        root.geometry("1010x1060")
         if sys.platform == "win32":
             try:
                 from .icon_asset import create_priest_icon
@@ -46,6 +46,7 @@ class App:
         self.renew = tk.BooleanVar(value=self.cfg.use_renew)
         self.melee_oom = tk.BooleanVar(value=self.cfg.melee_when_oom)
         self.movement = tk.BooleanVar(value=self.cfg.enable_movement)
+        self.stationary_tracking = tk.BooleanVar(value=self.cfg.enable_stationary_tracking)
         self.processes = tk.StringVar(value=", ".join(self.cfg.allowed_processes))
         self.learn_record = tk.BooleanVar(value=self.cfg.learning_record_gameplay)
         self.learn_corrections = tk.BooleanVar(value=self.cfg.learning_record_corrections)
@@ -150,6 +151,8 @@ class App:
                                 ("Vision evaluation / coverage", self.view_vision)):
             ttk.Button(vision_buttons,text=label,command=callback).pack(side="left",padx=(0,8))
         ttk.Label(vision_buttons,text="3-frame RGB + simultaneous keys/mouse; GPU optional; candidate-only").pack(side="left")
+        ttk.Button(frame, text="Export diagnostic report (ZIP to upload into chat)",
+                   command=self.export_diagnostics).pack(anchor="w", pady=(2, 4))
         ttk.Button(learn_row, text="Action semantics — bindings and confirmed uses",
                    command=self.view_semantics).grid(row=3, column=0, columnspan=2,
                                                       sticky="w", pady=(6,0))
@@ -172,6 +175,8 @@ class App:
                 row=index//3, column=index%3, sticky="w", padx=(0,18), pady=2)
         ttk.Checkbutton(frame, text="Experimental movement: short W steps for range errors; right turns for facing errors (OFF by default)",
                         variable=self.movement, command=self.store_flags).pack(anchor="w", pady=3)
+        ttk.Checkbutton(frame, text="Stationary fleeing-mob tracking: turn only on confirmed facing errors, wait for LoS, NEVER chase (OFF until dry-run verified)",
+                        variable=self.stationary_tracking, command=self.store_flags).pack(anchor="w", pady=3)
         ttk.Checkbutton(frame,text="Enable real key presses (UNSAFE until bar detection is calibrated)",
                         variable=self.live,command=self.store_flags).pack(anchor="w",pady=7)
         ttk.Checkbutton(frame,text="Allow drinking when mana is low (requires drink macro on key 5)",
@@ -210,6 +215,8 @@ class App:
         self.log("Learning Mode records game-only screenshots while WoW has focus and telemetry decisions; no browser captures.")
         self.log("Demonstration: pause bot, record all game-focused keys/mouse; chat guarded, manual privacy pause for text boxes.")
         self.log("Learning models are advisory only. No trained model controls movement or spells in this release.")
+        self.log("v0.25: Export a synthetic offline diagnostics ZIP anytime. Optional live optical read never captures screenshots to disk.")
+        self.log("Stationary tracking is OFF by default; enable only after examining dry-run outcomes. No LoS pursuit.")
         self.log("v0.23: Training examples now include target selection, spell events and looting evidence (new PriestBridge addon required).")
         self.log("PyTorch is optional for the CNN. See README for installing it in your permanent .venv.")
 
@@ -394,6 +401,7 @@ class App:
         self.cfg.use_renew = self.renew.get()
         self.cfg.melee_when_oom = self.melee_oom.get()
         self.cfg.enable_movement = self.movement.get()
+        self.cfg.enable_stationary_tracking = self.stationary_tracking.get()
         self.cfg.learning_record_gameplay = self.learn_record.get()
         self.cfg.learning_record_corrections = self.learn_corrections.get()
         self.cfg.learning_record_mouse = self.learn_mouse.get()
@@ -447,6 +455,21 @@ class App:
         else:
             self.log(str(CONFIG_PATH))
         self.log("After editing config.json, restart the app to apply changes.")
+
+    def export_diagnostics(self):
+        """Build report in background; read-only telemetry snapshot if available."""
+        self.log('Generating offline telemetry/decision scenarios and uploadable ZIP...')
+        def worker():
+            try:
+                from .diagnostics import generate_report
+                from zipfile import ZipFile
+                report_path = generate_report(include_live=True, current_config=self.cfg)
+                with ZipFile(report_path) as z:
+                    summary = json.loads(z.read('report.json'))['summary']
+                self.events.put(('diagnostic_done', (str(report_path), summary, None)))
+            except Exception as exc:
+                self.events.put(('diagnostic_done', (None, None, str(exc))))
+        threading.Thread(target=worker, daemon=True).start()
 
     def log(self, text):
         self.log_area.configure(state="normal")
@@ -1249,6 +1272,18 @@ class App:
                     self.target_text.set(f"Target generation: {target if target is not None else '--'}  |  "
                                          f"Success sequence: {success if success is not None else '--'}")
                 elif kind=="decision": self.decision_text.set("Decision: "+value)
+                elif kind=="diagnostic_done":
+                    path, summary, error = value
+                    if error:
+                        self.log('Diagnostic export failed: ' + error)
+                        messagebox.showerror('Diagnostics failed', error, parent=self.root)
+                    else:
+                        self.log(f"Diagnostics: {summary['passed']}/{summary['total']} passed — {path}")
+                        messagebox.showinfo('Upload this report to ChatGPT',
+                            f"Offline checks: {summary['passed']}/{summary['total']} passed.\n\n"
+                            f"Upload this ZIP into PriestBot Chat 2:\n{path}\n\n"
+                            'The live telemetry snapshot may say unavailable if WoW is not visible.',
+                            parent=self.root)
                 elif kind=="calibrate":self.capture()
                 elif kind=="verify_addon":self.verify_addon()
                 elif kind=="toggle":self.toggle()
