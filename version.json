@@ -1,4 +1,4 @@
 {
-  "version": "0.24.1",
-  "description": "Priest healing rotation: 60% cast heals, optional 80% pre-pull Renew, and mana-aware pre-pull Shield; includes compact telemetry."
+  "version": "0.25.0",
+  "description": "Attended stationary farming: opt-in fleeing-mob turns, bounded no-chase line-of-sight waiting, and uploadable offline telemetry/decision diagnostic ZIP."
 }

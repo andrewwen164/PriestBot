@@ -30,6 +30,13 @@ class Config:
         "move_forward": "w", "turn_right": "right"})
     # v0.16: opt-in, bounded motor movement (does not know enemy bearing).
     enable_movement: bool = False
+    # Attended stationary farming: turn in place on confirmed fleeing-mob
+    # facing errors and wait briefly on LoS. Never pursue an LoS target.
+    enable_stationary_tracking: bool = False  # explicitly opt in after dry-run
+    flee_target_hp_below: float = 0.40
+    los_wait_s: float = 8.0
+    los_retry_s: float = 2.0
+    los_max_retries: int = 3
     approach_pulse_s: float = 0.45   # hold W for one short pulse
     approach_max_pulses: int = 6     # max ~2.7s of forward motion per target
     turn_pulse_s: float = 0.22       # hold turn-right for one short pulse

@@ -1,3 +1,70 @@
+# PriestBot v0.25.0 — Attended Farmer Diagnostics (Live Validation Pending)
+
+**Purpose:** assisted stationary farming in an open area while the owner
+monitors the game. This is not autonomous navigation or an unattended leveler.
+The v0.24.1 healing rotation and v0.24.0 compact telemetry are included.
+
+## Export a test report to upload into PriestBot Chat 2
+
+1. In the desktop app, select **Export diagnostic report (ZIP to upload into chat)**.
+   The tests don't press keys, move the character, require a GPU, or need a
+   running WoW client. The button also tries **one optional, read-only live
+   optical sample** when PriestBridge is visible; failure to see it is marked
+   `unavailable`, not a failed synthetic test.
+2. Wait for the popup showing the complete ZIP path under
+   `%LOCALAPPDATA%\PriestBot\diagnostic_reports`.
+3. Upload that `.zip` here. It contains **report.md** (human-readable expected
+   vs actual decisions) and **report.json** (all step observations/reasons),
+   a minimal local configuration summary and decoder checks. No screenshot,
+   chat, character name, keyboard log, or computer username is included.
+4. Alternatively run from PowerShell without the GUI:
+
+   ```powershell
+   Push-Location "$env:LOCALAPPDATA\PriestBot"
+   & "$env:LOCALAPPDATA\PriestBot\.venv\Scripts\python.exe" -m priestbot.diagnostics
+   Pop-Location
+   ```
+
+   `--live` optionally requests a read-only visible PriestBridge sample.
+   Diagnostics use installed runtime dependencies only, **not pytest**.
+
+The included scenarios cover the 60% heal, pre-pull Shield/Renew, corrupted
+normal/compact status bars, stale error counters, fleeing facing corrections,
+LoS waiting/timeouts, and stopping on invalid sensor values. All results are
+**synthetic regression evidence only**; real spells and real mob motion must
+still be tested in WoW. The standard developer suite additionally uses pytest.
+
+## Fleeing enemies and line of sight
+
+**Stationary fleeing-mob tracking** is a separate checkbox, **OFF by default**
+until you verify it in dry-run. With addon target-generation and fresh error
+signals, it permits short, bounded **turn-in-place** corrections after a
+facing error if the target is at or below 40% HP. It never guesses a target's
+screen bearing. Turning right repeatedly may be slower than a real tracking
+system but cannot make the bot walk into other mobs.
+
+- On line-of-sight failure, stay planted and retry with a two-second interval.
+  After eight seconds or three failed retries, clear and skip the target.
+  **Never follow** a fleeing enemy around terrain.
+- Turning is limited by the existing `turn_max_pulses` (10 by default), with
+  explicit fresh game errors and delays between turn pulses. No free spinning.
+- For a stationary farmer, leave **Experimental movement OFF**. Even if that
+  box was previously on, stationary tracking takes priority when usable and
+  disables forward movement on error recovery. Neither setting provides a
+  world-space anchor, aggro-risk map, or verified mob-direction detector.
+- When there is no reliable addon signal/target generation, retain legacy
+  skip/stop behavior; do not infer the direction from a stale error tile.
+- The F9 panic stop, rate limits, safety thresholds, and dry-run default remain.
+
+**Suggested live validation:** open field, one fleeing mob, tracking checked
+and real keys unchecked; inspect dry-run intent/reasons, verify `turn_right`
+only on fresh facing errors, and verify no `move_forward` action during LoS.
+Only then consider live-input trials while watching the character.
+
+---
+
+## Previous release notes
+
 # PriestBot v0.24.1 — Priest Healing Rotation (Live Validation Pending)
 
 This release tunes the **existing rule-based rotation** while preserving the

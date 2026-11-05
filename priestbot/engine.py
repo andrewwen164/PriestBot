@@ -78,6 +78,14 @@ class PriestEngine:
         self.pending_movement = None
         self.approach_pulses = 0
         self.turn_pulses = 0
+        self.los_blocked_since = None
+        self.los_retry_at = None
+        self.los_retries = 0
+
+    def _clear_los_wait(self):
+        self.los_blocked_since = None
+        self.los_retry_at = None
+        self.los_retries = 0
 
     def _act(self, kind, reason, now):
         self.ready_at = now + self.cfg.action_delay_s
@@ -179,6 +187,8 @@ class PriestEngine:
                 self.observed_success_seq = obs.success_seq
                 self.last_confirmed_spell = obs.success_spell
                 self.last_confirmed_at = now
+                if obs.success_spell in ('pain', 'smite', 'mind_blast'):
+                    self._clear_los_wait()
                 if obs.success_spell == 'shield':
                     self.last_shield_confirmed_at = now
                     self.last_shield = now
@@ -231,7 +241,35 @@ class PriestEngine:
                     0 <= now - self.last_offensive_at <= 4.0):
                     # Movement is ONLY triggered by a new game-reported error.
                     # Tab targeting alone gives no directional/distance fix.
-                    if self.cfg.enable_movement and self.cfg.telemetry_source == 'addon' and obs.target_seq is not None:
+                    reliable = self.cfg.telemetry_source == 'addon' and obs.target_seq is not None
+                    fleeing = target <= self.cfg.flee_target_hp_below
+                    stationary = self.cfg.enable_stationary_tracking and reliable
+                    if obs.error == 'los' and stationary:
+                        if self.los_blocked_since is None:
+                            self.los_blocked_since = now
+                        self.los_retries += 1
+                        self.los_retry_at = now + self.cfg.los_retry_s
+                        self.pending_movement = None
+                        # A failed attempt is not a successful wand hit/cast.
+                        self.wand_active = False
+                        self.melee_active = False
+                        if self.last_offensive_kind == 'smite':
+                            self.last_smite = float('-inf')
+                        elif self.last_offensive_kind == 'pain':
+                            self.last_pain = float('-inf')
+                        elif (self.last_offensive_kind == 'mind_blast' and
+                              self.mb_opener_state == 'casting'):
+                            self.mb_opener_state = 'pending'
+                            self.mb_next_attempt_at = now + self.cfg.los_retry_s
+                        if (now - self.los_blocked_since >= self.cfg.los_wait_s or
+                                self.los_retries > self.cfg.los_max_retries):
+                            self.pending_skip_reason = 'Line of sight never recovered'
+                    elif (obs.error == 'facing' and stationary and fleeing and
+                          self.turn_pulses < self.cfg.turn_max_pulses):
+                        self.pending_movement = 'turn_right'
+                    elif (obs.error == 'facing' and stationary and fleeing):
+                        self.pending_skip_reason = 'Fleeing target facing correction limit reached'
+                    elif self.cfg.enable_movement and reliable and not stationary:
                         if obs.error == 'range' and self.approach_pulses < self.cfg.approach_max_pulses:
                             self.pending_movement = 'move_forward'
                         elif obs.error == 'facing' and self.turn_pulses < self.cfg.turn_max_pulses:
@@ -263,6 +301,7 @@ class PriestEngine:
                     self.last_progress_at = now
                     self.last_target_hp = target
                     self.failed_targets = 0
+                    self._clear_los_wait()
                 if (self.last_progress_at is not None and
                         now - self.last_progress_at >= self.cfg.stuck_timeout_s):
                     self._clear_current_target()
@@ -279,6 +318,22 @@ class PriestEngine:
         # attack/pain/shield key presses. Health sensor emergencies still stop above.
         if obs.casting is True:
             return Decision(None, "Casting; waiting for completion")
+        if self.los_blocked_since is not None:
+            # No chase: the bot is planted in its field. Wait for the fleeing
+            # mob to become castable, then issue a bounded offensive probe.
+            # Defensive self-healing is still allowed during LoS recovery.
+            if (self.cfg.use_heal and hp <= self.cfg.heal_below and
+                    mana > self.cfg.heal_mana_min and now >= self.ready_at):
+                return self._act('heal', 'Healing while waiting for line of sight', now)
+            if now - self.los_blocked_since >= self.cfg.los_wait_s:
+                self.failed_targets += 1
+                self._clear_current_target()
+                return self._act('clear_target', 'Line of sight timeout; no pursuit', now)
+            if now < self.los_retry_at:
+                return Decision(None, 'Line of sight blocked; waiting in place')
+            self.los_retry_at = now + self.cfg.los_retry_s
+            self.wand_active = False
+            self.melee_active = False
         # Move only when safe and only while target remains selected.  The
         # engine does not know the target bearing and cannot path around walls.
         if self.pending_movement is not None:
@@ -443,6 +498,7 @@ class PriestEngine:
                 mana >= self.cfg.shield_mana_min)
 
     def _clear_current_target(self):
+        self._clear_los_wait()
         self.pending_movement = None
         self.approach_pulses = 0
         self.turn_pulses = 0
