@@ -259,15 +259,21 @@ def _target_state(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int):
         sx = x + round((px + 4) * scale)
         sy = y + round((row_y + 4) * scale)
         if sx < 0 or sy < 0 or sx >= rgb.shape[1] or sy >= rgb.shape[0]:
-            raise BridgeNotFound('PriestBridge target-state row clipped')
+            return None  # Optional marker absent on earlier 160-unit panels
         return tuple(int(v) for v in rgb[sy, sx, :3])
 
-    r, g, b = sample(212)
+    marker = sample(212)
+    if marker is None:
+        return None, None
+    r, g, b = marker
     if not (r < 65 and 120 <= g <= 210 and b >= 205):
         return None, None
 
     def flag(px):
-        r, g, b = sample(px)
+        rgb_flag = sample(px)
+        if rgb_flag is None:
+            raise BridgeNotFound('PriestBridge target-state flags clipped')
+        r, g, b = rgb_flag
         if g >= 190 and r < 75 and b < 75:
             return True
         if r >= 190 and g < 75 and b < 75:
