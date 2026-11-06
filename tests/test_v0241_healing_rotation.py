@@ -6,8 +6,8 @@ from priestbot.engine import Observation, PriestEngine
 from priestbot.keybindings import validate_bindings
 
 
-def observation(hp=1.0, mana=1.0, target=0.0, *, shield=None, casting=None):
-    return Observation(hp, mana, target, casting=casting, shield_aura=shield)
+def observation(hp=1.0, mana=1.0, target=0.0, *, shield=None, casting=None, target_exists=None):
+    return Observation(hp, mana, target, casting=casting, shield_aura=shield, target_exists=target_exists)
 
 
 @pytest.mark.parametrize('target', (0.0, 1.0))
@@ -37,7 +37,7 @@ def test_renew_is_only_between_pulls_and_has_refresh_spacing():
     assert engine.update(observation(.70, .9, 1), 4).action == 'pain'
     assert engine.update(observation(.70, .9, 1), 6).action != 'renew'
     # A finished pull does not refresh Renew before its interval expires.
-    assert engine.update(observation(.70, .9, 0), 8).action == 'next_target'
+    assert engine.update(observation(.70, .9, 0, target_exists=False), 8).action == 'next_target'
 
 
 def test_renew_reserves_mana_and_does_not_interrupt_casts():
