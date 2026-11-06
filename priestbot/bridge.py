@@ -167,6 +167,8 @@ def _status(rgb: np.ndarray, x: int, y: int, scale: float):
         err='facing'
     elif r > 175 and g < 70 and b < 70:
         err='failed'
+    elif r > 200 and g > 200 and b < 65:
+        err='pain_resist'
     elif 50 <= r <= 120 and 50 <= g <= 120 and 50 <= b <= 120:
         err=None
     else:

@@ -115,6 +115,15 @@ def scenarios() -> tuple[Scenario, ...]:
                   Step(3, _ob(target=.9, target_seq=1), 'smite'),)),
         Scenario('Malformed sensor values: stop without inputs',
                  {}, (Step(0, _ob(hp=1.2, target=.5), None, True),)),
+        Scenario('Pain resisted: retry when its 1.5-second GCD ends',
+                 {'main_damage': 'wand', 'use_shield': False},
+                 (Step(0, _ob(target=.9, pain_aura='unknown', success_seq=0), 'pain'),
+                  Step(.2, _ob(target=.9, pain_aura='estimated', error='pain_resist',
+                               seq=1, success_spell='pain', success_seq=1), None),
+                  Step(1.49, _ob(target=.9, pain_aura='estimated', error='pain_resist',
+                                 seq=1, success_spell='pain', success_seq=1), None),
+                  Step(1.5, _ob(target=.9, pain_aura='estimated', error='pain_resist',
+                                seq=1, success_spell='pain', success_seq=1), 'pain'),)),
     )
 
 
@@ -148,6 +157,7 @@ def run_decision_tests() -> list[dict[str, Any]]:
 
 
 def _make_optical_panel(*, compact: bool, corrupted: bool = False,
+                        pain_resist: bool = False,
                         packet: bytes | None = None):
     """Generate synthetic native StatusBar pixels without importing tests."""
     import numpy as np
@@ -159,7 +169,7 @@ def _make_optical_panel(*, compact: bool, corrupted: bool = False,
         p[0:12, x:x + 12] = color
     p[0:8, 48:56] = (0, 204, 102)
     p[0:10, 60:70] = (77, 77, 77)
-    p[0:10, 76:86] = (77, 77, 77)
+    p[0:10, 76:86] = (255, 255, 0) if pain_resist else (77, 77, 77)
     for x in (96, 108, 120, 132):
         p[0:8, x:x + 8] = (64, 64, 64)
     if compact:
@@ -238,6 +248,12 @@ def run_telemetry_tests() -> list[dict[str, Any]]:
                    'passed': decode_pixels(frame, reading.marker_x,
                                            reading.marker_y, reading.scale,
                                            layout=reading.layout) is None})
+    try:
+        reading = decode_bridge(_make_optical_panel(compact=True, pain_resist=True))
+        passed = reading.observation.error == 'pain_resist'
+    except Exception:
+        passed = False
+    checks.append({'name': 'compact Pain miss/resist pixel decodes', 'passed': passed})
     return checks
 
 

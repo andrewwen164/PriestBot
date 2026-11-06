@@ -13,7 +13,8 @@ function CreateFrame(kind,name,parent)
   function self:SetClampedToScreen(...) end
   function self:Show() end
   function self:Hide() end
-  function self:RegisterEvent(ev) end
+  self.events={}
+  function self:RegisterEvent(ev) self.events[ev]=true end
   function self:SetScript(name,callback) self[name]=callback end
   function self:CreateTexture()
     local t={}
@@ -110,6 +111,34 @@ end
 assert(seen['B|1|2|ACTIONBUTTON2|item|117|Food'],'2 binding missing')
 assert(seen['S|8092|Mind Blast'],'spell success event not encoded')
 assert(seen['B|1|SHIFT-G|MULTIACTIONBAR1BUTTON7|macro|9|Bandage > Heavy Linen Bandage'],'macro binding missing')
+-- Forever has no addon CLEU; a target UNIT_COMBAT Shadow RESIST immediately
+-- after our Pain cast can signal a bounded retry. Other schools and stale
+-- events must not be mistaken for Pain resistance.
+local signalFrame
+for _,frame in ipairs(frames) do
+  if frame.events and frame.events.UNIT_COMBAT then signalFrame=frame end
+end
+assert(signalFrame and signalFrame.OnEvent,'UNIT_COMBAT listener missing')
+SlashCmdList.PRIESTBRIDGE('test pain')
+clock=clock+.1
+signalFrame.OnEvent(signalFrame,'UNIT_COMBAT','target','RESIST','',0,32)
+local resistPixel
+for _,tile in ipairs(PriestBridgeFrame.children) do
+  local pp=tile.point
+  if pp and pp[4]==76 and pp[5]==0 then resistPixel=tile end
+end
+assert(resistPixel and resistPixel.rgb[1]==1 and resistPixel.rgb[2]==1 and resistPixel.rgb[3]==0,
+       'fresh Shadow resist did not set Pain retry signal')
+SlashCmdList.PRIESTBRIDGE('test range')
+SlashCmdList.PRIESTBRIDGE('test pain')
+clock=clock+.1
+signalFrame.OnEvent(signalFrame,'UNIT_COMBAT','target','RESIST','',0,4)
+assert(resistPixel.rgb[2]==.5,'non-Shadow resist must be ignored')
+signalFrame.OnEvent(signalFrame,'UNIT_SPELLCAST_SUCCEEDED','player','cast-guid',589)
+clock=clock+.1
+signalFrame.OnEvent(signalFrame,'UNIT_COMBAT','target','MISS','',0,32)
+assert(resistPixel.rgb[1]==1 and resistPixel.rgb[2]==1,
+       'fresh Shadow miss did not set Pain retry signal')
 -- Compact is purely a visual relayout: bindings/packets continue unchanged.
 SlashCmdList.PRIESTBRIDGE('compact')
 assert(PriestBridgeSettings.compact == true)
@@ -150,4 +179,4 @@ SlashCmdList.PRIESTBRIDGE('normal')
 assert(PriestBridgeSettings.compact == false)
 assert(PriestBridgeFrame.w == 270 and PriestBridgeFrame.h == 102)
 assert(PriestBridgeFrame.point[1]=='TOPLEFT')
-print('LUA MOCK OK: bindings and optical checksums validated')
+print('LUA MOCK OK: bindings, optical checksums and Pain resist correlation validated')

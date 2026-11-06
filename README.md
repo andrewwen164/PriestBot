@@ -1,3 +1,47 @@
+# PriestBot v0.25.3 — Shadow Word: Pain Miss/Resist Retry
+
+When PriestBridge observes a `UNIT_COMBAT` **Shadow-school MISS or RESIST**
+on the current target within one second of a confirmed Pain cast, it now
+signals `pain_resist` through the existing optical error pixel. The desktop
+engine invalidates the attempted DoT estimate and can cast Pain again as soon
+as the **1.5-second Priest global cooldown** finishes (at the next scan tick),
+provided mana and other safety gates permit. The previous 1.6-second wand
+start cushion also defaults to 1.5 seconds and the old default migrates;
+explicit custom settings are preserved.
+
+- Up to **two additional Pain casts per target** after detected misses/resists;
+  then continue wanding rather than loop indefinitely on an immune mob.
+- A real, readable `present` aura overrides a suspected resist. A mere
+  successful-cast event or `estimated` aura does *not* prove the DoT landed.
+- Old error counters, other magic schools, unrelated/late misses, and target
+  changes cannot trigger a retry. Survival/healing still takes precedence.
+- Forever does **not expose the unrestricted combat log to addons**. The
+  `UNIT_COMBAT` signal exposes school and victim, **not the caster/spell ID**;
+  this is a narrow, best-effort correlation for an attended, mostly solo farmer,
+  not infallible spell attribution. Client event availability must be tested
+  live. If the resist signal is unavailable, the existing timed aura fallback
+  remains (it cannot independently prove an instant resisted application).
+- `/pb test resist` generates a synthetic yellow resist signal for a **dry-run
+  decoder check only**. Do not use the test command during live-input farming.
+
+**Upgrade:** Desktop **Setup & Tools → Update from ZIP** and install/repair
+the updated PriestBridge addon. In WoW run `/reload` and `/pb bottom`.
+Start with real game inputs **OFF**; verify `/pb test resist` appears as
+`pain_resist` before a short, watched live test against an ordinary mob. Keep
+experimental movement OFF for stationary farming. If the game visibly resists
+Pain but no `pain_resist` event appears, collect the logs for a follow-up
+visual corroboration approach.
+
+**Offline status:** Python and mocked Lua tests verify timing, stale events,
+false-color safety, target changes, and retry limit. Live Forever attribution
+and actual 1.5s GCD performance remain unverified. The scanner and Windows
+scheduler may issue the next action one scan later than the mathematical GCD
+boundary; no extra intentional delay is added.
+
+---
+
+## Previous release notes
+
 # PriestBot v0.25.2 — Compact Telemetry at Bottom-Right
 
 The compact PriestBridge strip now defaults to the **bottom-right corner**,
