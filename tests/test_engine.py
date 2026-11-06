@@ -13,7 +13,7 @@ def test_combat_rotation_and_kill():
     assert e.update(Observation(.4,.70,.65),10).action=="heal"
     assert e.update(Observation(.8,.60,.55),12).action is None
     assert e.update(Observation(.8,.60,.55),13.3).action=="wand"
-    assert e.update(Observation(.8,.60,0),16).action=="next_target"
+    assert e.update(Observation(.8,.60,0, target_dead=True),16).action=="next_target"
 
 
 def test_low_mana_rests_without_drinking():
@@ -62,3 +62,27 @@ def test_wait_for_respawns_and_retry():
     assert e.update(Observation(1,1,0),20).action is None
     assert e.update(Observation(1,1,0),25).action=="next_target"
     assert e.update(Observation(1,1,0),301).stop
+
+
+def test_low_hp_target_is_not_abandoned():
+    """Even 0.001% optical HP is still a living target."""
+    e = PriestEngine(Config(main_damage="wand", use_shield=False, use_pain=False))
+    assert e.update(Observation(1, 1, 1), 0).action == "wand"
+    assert e.update(Observation(1, 1, 0.00001), 2).action is None
+    assert e.update(Observation(1, 1, 0.00000001), 4).action is None
+
+
+def test_zero_optical_hp_during_fight_fails_closed():
+    e = PriestEngine(Config(main_damage="wand", use_shield=False, use_pain=False))
+    assert e.update(Observation(1, 1, 1), 0).action == "wand"
+    uncertain = e.update(Observation(1, 1, 0), 2)
+    assert uncertain.action is None and not uncertain.stop
+    timed_out = e.update(Observation(1, 1, 0), 4.1)
+    assert timed_out.stop and timed_out.action is None
+
+
+def test_explicit_alive_signal_overrides_rounded_zero_hp():
+    e = PriestEngine(Config(main_damage="wand", use_shield=False, use_pain=False))
+    assert e.update(Observation(1, 1, 1), 0).action == "wand"
+    result = e.update(Observation(1, 1, 0, target_exists=True, target_dead=False), 2)
+    assert not result.stop and result.action != "next_target"
