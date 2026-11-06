@@ -132,3 +132,88 @@ def test_compact_bottom_right_optical_read_without_coordinate_calibration(scale)
                             reading.scale, layout=reading.layout)
     assert decoded is not None and decoded.kind == 'T'
     assert decoded.sequence == 13
+
+
+def _stamp_target_state(image, *, scale=1, exists=True, dead=False, marker=True,
+                        panel_x=37, panel_y=23, row=37):
+    """Synthetic PriestBridge v0.26 pixel flags on the validated panel."""
+    def tile(x, rgb):
+        left = panel_x + round(x * scale)
+        top = panel_y + round(row * scale)
+        width = max(1, round(8 * scale))
+        image[top:top+width, left:left+width] = rgb
+    if marker:
+        tile(160, (0, 153, 255))
+    def flag(value):
+        return (0, 255, 0) if value is True else (
+            (255, 0, 0) if value is False else (77, 77, 77))
+    tile(168, flag(exists))
+    tile(180, flag(dead))
+    return image
+
+
+@pytest.mark.parametrize('scale', (1, 1.17, 1.5, 2))
+def test_v026_compact_target_state_roundtrip_at_zero_optical_hp(scale):
+    image = compact_panel(target=0, scale=scale)
+    _stamp_target_state(image, scale=scale, exists=True, dead=False)
+    obs = decode_bridge(image).observation
+    assert obs.target_hp == 0
+    assert obs.target_exists is True
+    assert obs.target_dead is False
+
+    from priestbot.config import Config
+    from priestbot.engine import PriestEngine
+    engine = PriestEngine(Config(main_damage="wand", use_shield=False, use_pain=False))
+    assert engine.update(obs, 0).action == "wand"
+    assert engine.update(obs, 2).action is None
+
+    _stamp_target_state(image, scale=scale, exists=True, dead=True)
+    dead_obs = decode_bridge(image).observation
+    assert dead_obs.target_dead is True
+    assert engine.update(dead_obs, 4).action == "next_target"
+
+
+def test_v026_legacy_and_secret_states_are_not_falsely_decoded():
+    old = decode_bridge(compact_panel(target=0)).observation
+    assert old.target_exists is None and old.target_dead is None
+    image = compact_panel(target=0)
+    _stamp_target_state(image, exists=True, dead=None)
+    obs = decode_bridge(image).observation
+    assert obs.target_exists is True and obs.target_dead is None
+    _stamp_target_state(image, exists=None, dead=None)
+    obs = decode_bridge(image).observation
+    assert obs.target_exists is None and obs.target_dead is None
+    _stamp_target_state(image, exists=False, dead=False)
+    with pytest.raises(BridgeNotFound):
+        decode_bridge(image)
+
+
+def test_v026_normal_layout_target_state():
+    panel = np.full((102, 270, 3), (27, 37, 48), dtype=np.uint8)
+    def tile(x, y, w, h, rgb):
+        panel[y:y+h, x:x+w] = rgb
+    for x, color in ((0,(255,0,255)),(16,(0,255,255)),(32,(255,255,0))):
+        tile(x,0,12,12,color)
+    tile(48,0,8,8,(0,204,102))
+    tile(60,0,10,10,(77,77,77))
+    tile(76,0,10,10,(77,77,77))
+    for x in (96,108,120,132):
+        tile(x,0,8,8,(64,64,64))
+    for y,value,color in ((20,.85,(0,255,0)),(40,.7,(0,97,255)),(60,0,(255,0,0))):
+        tile(0,y,160,12,(25,25,25))
+        tile(0,y,round(160*value),12,color)
+    tile(0,84,8,8,(0,179,179))
+    for x in (16,32,48):
+        tile(x,84,10,10,(77,77,77))
+    for x in (64,76,88,100,112,124,136,148):
+        tile(x,84,8,8,(64,64,64))
+    tile(160,84,8,8,(0,153,255))
+    tile(168,84,8,8,(0,255,0))
+    tile(180,84,8,8,(0,255,0))
+    image = np.full((240, 420, 3), (20, 40, 60), dtype=np.uint8)
+    image[24:126, 32:302] = panel
+    result = decode_bridge(image)
+    assert result.layout == 'normal'
+    assert result.observation.target_hp == 0
+    assert result.observation.target_exists is True
+    assert result.observation.target_dead is False
