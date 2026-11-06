@@ -151,9 +151,9 @@ local function targetTile(x, row)
   end
   error('missing target-state tile '..x)
 end
-local markerTile=targetTile(160,84)
-local existsTile=targetTile(168,84)
-local deadTile=targetTile(180,84)
+local markerTile=targetTile(212,84)
+local existsTile=targetTile(224,84)
+local deadTile=targetTile(236,84)
 assert(markerTile.rgb[2]==.6 and markerTile.rgb[3]==1,'target protocol marker missing')
 PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
 assert(existsTile.rgb[1]==1 and deadTile.rgb[1]==.3,'no target should be absent/unknown')
