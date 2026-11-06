@@ -1,4 +1,4 @@
 {
-  "version": "0.25.2",
+  "version": "0.25.3",
   "description": "Compact PriestBridge telemetry defaults to bottom-right, with saved /pb top and /pb bottom positioning; all previous attended-farmer and UI features included."
 }

@@ -10,8 +10,8 @@ def o(hp=1, mana=.85, target=1, **kwargs):
 def test_single_wand_press_after_gcd_and_no_repeat():
     e = PriestEngine(Config(main_damage="wand", use_shield=False))
     assert e.update(o(), 0).action == "pain"
-    assert e.wand_start_at == 1.6
-    for t in (.3, 1.2, 1.59):
+    assert e.wand_start_at == 1.5
+    for t in (.3, 1.2, 1.49):
         assert e.update(o(), t).action is None
     r = e.update(o(), 1.6)
     assert r.action == "wand" and "GCD" in r.reason

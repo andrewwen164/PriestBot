@@ -14,7 +14,7 @@ class Observation:
     mana: float
     target_hp: float
     casting: bool | None = None  # Optional addon event signal; None in manual mode.
-    error: str | None = None  # range | los | facing | failed | None
+    error: str | None = None  # range | los | facing | failed | pain_resist | None
     error_seq: int | None = None  # 4-bit counter; only changes matter.
     # v0.8 extension: None means an older addon or manual mode.
     shield_aura: str | None = None  # present | absent | estimated | unknown
@@ -52,6 +52,11 @@ class PriestEngine:
         self.last_shield = float('-inf')
         self.last_renew = float('-inf')
         self.last_pain = float('-inf')
+        self.last_pain_press_at = float('-inf')
+        self.pain_resist_retries = 0
+        self.pain_retry_pending = False
+        self.pain_retry_at = float('-inf')
+        self.pain_suppressed_for_target = False
         self.last_smite = float('-inf')
         self.mb_opener_state = 'pending'  # pending | casting | done (per target)
         self.mb_attempted_at = None
@@ -115,6 +120,8 @@ class PriestEngine:
             self.ready_at = max(self.ready_at, now + self.cfg.heal_cast_fallback_s)
         if kind == "pain":
             self.last_pain = now
+            self.last_pain_press_at = now
+            self.pain_retry_pending = False
         if kind == "smite":
             self.last_smite = now
         if kind == "mind_blast":
@@ -226,6 +233,22 @@ class PriestEngine:
                 self.observed_error_seq = obs.error_seq
             elif obs.error_seq != self.observed_error_seq:
                 self.observed_error_seq = obs.error_seq
+                if (obs.error == 'pain_resist' and target > .055 and
+                        self.target_since is not None and
+                        0 <= now - self.last_pain_press_at <= self.cfg.pain_resist_window_s):
+                    # UNIT_SPELLCAST_SUCCEEDED confirms the button was cast,
+                    # NOT that its effect landed. A fresh, target-correlated
+                    # miss overrides both cast-timer and estimated aura.
+                    self.confirmed_pain_until = float('-inf')
+                    self.pain_resist_retries += 1
+                    if self.pain_resist_retries <= self.cfg.pain_max_resist_retries:
+                        self.pain_retry_pending = True
+                        self.pain_retry_at = self.last_pain_press_at + self.cfg.wand_gcd_retry_s
+                        self.wand_start_at = None
+                        self.wand_active = False
+                    else:
+                        self.pain_retry_pending = False
+                        self.pain_suppressed_for_target = True
                 if obs.error == 'failed' and now - self.last_offensive_at <= 4:
                     if self.last_offensive_kind == 'pain':
                         self.last_pain = float('-inf')
@@ -438,6 +461,18 @@ class PriestEngine:
         pain_gap = (self.cfg.aura_retry_s if obs.pain_aura == 'absent' else self.cfg.pain_interval_s)
         if self._should_shield(obs, now, mana):
             return self._act("shield", "Shield missing/expired; attempting Power Word: Shield", now)
+        if self.pain_retry_pending:
+            # An actual readable debuff is proof against a false miss report.
+            # An estimated aura is NOT proof: it reflects only a cast event.
+            if obs.pain_aura == 'present' or not self.cfg.use_pain:
+                self.pain_retry_pending = False
+            elif mana < self.cfg.dot_mana_min:
+                self.pain_retry_pending = False
+                self.pain_suppressed_for_target = True
+            elif now < self.pain_retry_at:
+                return Decision(None, 'Waiting for Pain global cooldown after resist')
+            else:
+                return self._act('pain', 'Recasting Shadow Word: Pain after miss/resist', now)
         if self.cfg.main_damage == 'mind_blast_wand' and self.mb_opener_state != 'done':
             if self.mb_opener_state == 'casting':
                 # v0.8+ addons identify confirmed completions above. If the
@@ -459,7 +494,8 @@ class PriestEngine:
                     return Decision(None, 'Retrying Mind Blast after failed cast')
                 else:
                     return self._act('mind_blast', 'Opening target with Mind Blast', now)
-        if (self.cfg.use_pain and not pain_present and now - self.last_pain >= pain_gap and
+        if (self.cfg.use_pain and not self.pain_suppressed_for_target and
+                not pain_present and now - self.last_pain >= pain_gap and
                 mana >= self.cfg.dot_mana_min):
             return self._act("pain", "Pain missing/expired; attempting Shadow Word: Pain", now)
         if self.cfg.main_damage == "smite":
@@ -499,6 +535,7 @@ class PriestEngine:
 
     def _clear_current_target(self):
         self._clear_los_wait()
+        self.last_pain_press_at = float('-inf')
         self.pending_movement = None
         self.approach_pulses = 0
         self.turn_pulses = 0
@@ -507,6 +544,10 @@ class PriestEngine:
         self.mb_next_attempt_at = float('-inf')
         self.mb_attempts = 0
         self.wand_start_at = None
+        self.pain_resist_retries = 0
+        self.pain_retry_pending = False
+        self.pain_retry_at = float('-inf')
+        self.pain_suppressed_for_target = False
         self.target_since = None
         self.last_progress_at = None
         self.last_target_hp = None

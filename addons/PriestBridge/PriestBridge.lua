@@ -1,4 +1,4 @@
--- PriestBridge v0.25.2. Client-side, display-only telemetry for a permitted private client.
+-- PriestBridge v0.25.3. Client-side, display-only telemetry for a permitted private client.
 -- No game-memory access, sockets, arbitrary filesystem access or protected game actions.
 -- Modern combat secrets: never compare/calculate/display text from secret health values.
 -- Health/mana/target bars use the native StatusBar widget, as in v0.6.
@@ -111,6 +111,7 @@ for i=1,4 do
     targetBits[i] = squareOnRow(112+(i-1)*12,84,8,.25,.25,.25)
 end
 local successSeq, targetSeq, recentSuccess = 0,0,'none'
+local recentPainSuccessAt, recentPainTargetSeq = -math.huge, -1
 local shieldEstimateUntil, painEstimateUntil = 0,0
 local shieldState, painState = 'unknown','unknown'
 local SHIELD_DURATION, PAIN_DURATION = 30,18 -- configurable estimates, not claimed to be verified
@@ -210,12 +211,16 @@ local function recordSuccess(id)
     recentSuccess=kind
     local now=GetTime()
     if kind=='shield' then shieldEstimateUntil=now+SHIELD_DURATION end
-    if kind=='pain' then painEstimateUntil=now+PAIN_DURATION end
+    if kind=='pain' then
+        painEstimateUntil=now+PAIN_DURATION
+        recentPainSuccessAt, recentPainTargetSeq = now, targetSeq
+    end
     evaluateAuras()
 end
 local function newTarget()
     targetSeq=(targetSeq+1)%16
     painEstimateUntil=0
+    recentPainSuccessAt, recentPainTargetSeq = -math.huge, -1
     evaluateAuras()
 end
 redrawAuras()
@@ -242,6 +247,7 @@ local function redrawSignals()
     elseif lastError == 'los' then errorPixel:SetColorTexture(.7,0,1,1)
     elseif lastError == 'facing' then errorPixel:SetColorTexture(0,.7,1,1)
     elseif lastError == 'failed' then errorPixel:SetColorTexture(1,0,0,1)
+    elseif lastError == 'pain_resist' then errorPixel:SetColorTexture(1,1,0,1)
     else errorPixel:SetColorTexture(.3,.3,.3,1) end
     for i, t in ipairs(bits) do
         if sequence % (2^i) >= 2^(i-1) then t:SetColorTexture(1,1,1,1)
@@ -251,7 +257,8 @@ end
 local function recordError(reason)
     -- UI_ERROR_MESSAGE often arrives alongside UNIT_SPELLCAST_FAILED.
     -- Keep the specific reason instead of overwriting it with generic failure.
-    if reason == 'failed' and (lastError == 'range' or lastError == 'los' or lastError == 'facing')
+    if reason == 'failed' and (lastError == 'range' or lastError == 'los' or
+                              lastError == 'facing' or lastError == 'pain_resist')
        and GetTime() - lastErrorAt < .5 then return end
     lastError = reason
     lastErrorAt = GetTime()
@@ -280,7 +287,25 @@ local function classifyError(message)
 end
 local signalErrorCount = 0
 local function safeProcessSignal(event, ...)
-    local arg1, arg2 = ...
+    local arg1, arg2, _, _, arg5 = ...
+    if event == 'UNIT_COMBAT' then
+        -- Forever restricts COMBAT_LOG_EVENT_UNFILTERED. UNIT_COMBAT can
+        -- expose a target RESIST/MISS and its school, but NOT its caster or
+        -- spell ID. Correlate only fresh target Shadow misses immediately
+        -- after our confirmed Pain cast. This is best-effort, not proof of
+        -- attribution when multiple casters attack the same target.
+        if arg1 ~= 'target' or (arg2 ~= 'RESIST' and arg2 ~= 'MISS') then return end
+        if issecretvalue and issecretvalue(arg5) then return end
+        if canaccessvalue and not canaccessvalue(arg5) then return end
+        if type(arg5) ~= 'number' or math.floor(arg5 / 32) % 2 ~= 1 then return end
+        local now = GetTime()
+        if recentPainTargetSeq ~= targetSeq or now - recentPainSuccessAt > 1.0 then return end
+        recentPainSuccessAt = -math.huge -- never signal the same cast twice
+        painEstimateUntil = 0           -- success does not imply application
+        evaluateAuras()
+        if painState ~= 'present' then recordError('pain_resist') end
+        return
+    end
     if event == 'UI_ERROR_MESSAGE' then
         local reason = classifyError(arg2)
         if reason then recordError(reason) end
@@ -334,7 +359,8 @@ local eventNames = {
     'UI_ERROR_MESSAGE', 'UNIT_SPELLCAST_START', 'UNIT_SPELLCAST_STOP',
     'UNIT_SPELLCAST_SUCCEEDED', 'UNIT_SPELLCAST_FAILED',
     'UNIT_SPELLCAST_INTERRUPTED', 'UNIT_SPELLCAST_FAILED_QUIET',
-    'UNIT_SPELLCAST_CHANNEL_START', 'UNIT_SPELLCAST_CHANNEL_STOP'
+    'UNIT_SPELLCAST_CHANNEL_START', 'UNIT_SPELLCAST_CHANNEL_STOP',
+    'UNIT_COMBAT'
 }
 for _, event in ipairs(eventNames) do
     -- Event availability varies across private-server clients.
@@ -368,6 +394,7 @@ SlashCmdList.PRIESTBRIDGE = function(msg)
     elseif msg == 'test los' then recordError('los')
     elseif msg == 'test facing' then recordError('facing')
     elseif msg == 'test failed' then recordError('failed')
+    elseif msg == 'test resist' then painEstimateUntil=0; evaluateAuras(); recordError('pain_resist')
     elseif msg == 'test cast' then casting = not casting; castingAt = GetTime(); redrawSignals()
     elseif msg == 'test pain' then recordSuccess(589)
     elseif msg == 'test shield' then recordSuccess(17)
@@ -375,7 +402,7 @@ SlashCmdList.PRIESTBRIDGE = function(msg)
     elseif msg == 'test target' then newTarget()
     elseif msg == 'auras' then evaluateAuras(); print('PriestBridge aura status: shield='..shieldState..', pain='..painState..' (estimated=cast timer; unknown=unreadable)')
     else
-        print('PriestBridge v0.25.2: /pb compact|normal|top|bottom|show|hide|bindings|signals on/off|auras|test pain|test shield|test target|test range|test los|test facing|test cast')
+        print('PriestBridge v0.25.3: /pb compact|normal|top|bottom|show|hide|bindings|signals on/off|auras|test pain|test resist|test shield|test target|test range|test los|test facing|test cast')
     end
 end
 

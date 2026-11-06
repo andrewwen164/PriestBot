@@ -87,7 +87,11 @@ class Config:
     # v0.13: press Shoot ONCE, after Pain's global cooldown; no blind second
     # input. Name retained so existing config.json upgrades preserve tuning.
     pain_to_wand_delay_s: float = 0.0
-    wand_gcd_retry_s: float = 1.6
+    # Classic Priest global cooldown. A resisted Pain can be retried as soon as
+    # this expires, with no additional arbitrary action delay.
+    wand_gcd_retry_s: float = 1.5
+    pain_max_resist_retries: int = 2  # per target; never loop on immune mobs
+    pain_resist_window_s: float = 1.25  # match a fresh miss to the cast only
     # Between-mob healing gets a short retry guard rather than spamming the
     # heal key every generic action interval while a cast is failing.
     between_heal_retry_s: float = 4.0
@@ -122,6 +126,9 @@ class Config:
         # explicitly customized thresholds other than 45%.
         if copy.get('heal_below') == 0.45:
             copy['heal_below'] = 0.60
+        if copy.get('wand_gcd_retry_s') == 1.6:
+            # Prior versions used an extra 0.1s cushion. Use one actual GCD.
+            copy['wand_gcd_retry_s'] = 1.5
         for key in ("player_health", "player_mana", "target_health"):
             if isinstance(copy.get(key), dict):
                 copy[key] = Rect(**copy[key])
