@@ -209,7 +209,7 @@ def test_v026_normal_layout_target_state():
         tile(x,84,8,8,(64,64,64))
     tile(160,84,8,8,(0,153,255))
     tile(168,84,8,8,(0,255,0))
-    tile(180,84,8,8,(0,255,0))
+    tile(180,84,8,8,(255,0,0))
     image = np.full((240, 420, 3), (20, 40, 60), dtype=np.uint8)
     image[24:126, 32:302] = panel
     result = decode_bridge(image)
