@@ -1003,6 +1003,9 @@ class App:
                           f"target_seq={obs.target_seq}")
             else:
                 extra += ", no v0.8 aura/success telemetry"
+            extra += (f", Exists={obs.target_exists}, Dead={obs.target_dead}"
+                      if obs.target_exists is not None else
+                      ", target-state telemetry unavailable")
             result = (f"PriestBridge at ({rd.marker_x}, {rd.marker_y}), "
                       f"scale {rd.scale:.2f}; HP={obs.hp:.0%}, "
                       f"Mana={obs.mana:.0%}, Target={obs.target_hp:.0%}" + extra)
@@ -1013,7 +1016,8 @@ class App:
                                f"Pain: {obs.pain_aura or 'legacy/unknown'}  |  "
                                f"Last cast: {obs.success_spell or 'none'}")
             self.target_text.set(f"Target generation: {obs.target_seq if obs.target_seq is not None else '--'}  |  "
-                                 f"Success sequence: {obs.success_seq if obs.success_seq is not None else '--'}")
+                                 f"Exists: {obs.target_exists}  |  Dead: {obs.target_dead}  |  "
+                                  f"Success sequence: {obs.success_seq if obs.success_seq is not None else '--'}")
         except Exception as exc:
             self.log("Addon telemetry unavailable: " + str(exc))
             self.state_text.set("Addon detection failed. Verify /pb show and client compatibility.")
@@ -1120,6 +1124,7 @@ class App:
                 last_status=""
                 last_error_seq=None
                 last_success_seq=None
+                last_target_state=None
                 guard = TelemetryGuard(self.cfg.telemetry_grace_s,
                                        self.cfg.telemetry_recovery_frames)
                 while not self.stop_flag.is_set():
@@ -1185,6 +1190,13 @@ class App:
                         elif obs.success_seq != last_success_seq:
                             last_success_seq=obs.success_seq
                             self.events.put(("log", f"Confirmed cast event: {obs.success_spell or 'other'} (seq {obs.success_seq})"))
+                    state = (obs.target_exists, obs.target_dead)
+                    if state != last_target_state:
+                        if obs.target_exists is not None or obs.target_dead is not None:
+                            self.events.put(("log",
+                                f"Target state: exists={obs.target_exists}, dead={obs.target_dead}, "
+                                f"optical_hp={obs.target_hp:.3%}"))
+                        last_target_state = state
                     if now-last_metrics > .45:
                         extras = (f"  |  Casting {'yes' if obs.casting else 'no'}"
                                   if obs.casting is not None else "")
@@ -1192,7 +1204,7 @@ class App:
                         self.events.put(("aura", (obs.shield_aura or 'legacy/unknown',
                                                   obs.pain_aura or 'legacy/unknown',
                                                   obs.success_spell or 'none')))
-                        self.events.put(("target",(obs.target_seq,obs.success_seq)))
+                        self.events.put(("target",(obs.target_seq,obs.success_seq,obs.target_exists,obs.target_dead)))
                         last_metrics=now
                     result=engine.update(obs,now)
                     if rec is not None:
@@ -1280,8 +1292,9 @@ class App:
                     shield,pain,success=value
                     self.aura_text.set(f"Shield: {shield}  |  Pain: {pain}  |  Last confirmed cast: {success}")
                 elif kind=="target":
-                    target,success=value
+                    target,success,exists,dead=value
                     self.target_text.set(f"Target generation: {target if target is not None else '--'}  |  "
+                                         f"Exists: {exists}  |  Dead: {dead}  |  "
                                          f"Success sequence: {success if success is not None else '--'}")
                 elif kind=="decision": self.decision_text.set("Decision: "+value)
                 elif kind=="diagnostic_done":
