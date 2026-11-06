@@ -332,6 +332,10 @@ class PriestEngine:
                     self._clear_los_wait()
                 if (self.last_progress_at is not None and
                         now - self.last_progress_at >= self.cfg.stuck_timeout_s):
+                    # At the last visible pixel, a living mob can round to zero.
+                    # Stop rather than abandon a target explicitly known alive.
+                    if target <= (1.0 / 160) and obs.target_dead is False:
+                        return Decision(None, 'Low-HP living target not progressing; stopped', stop=True)
                     self._clear_current_target()
                     self.failed_targets += 1
                     self.status = "Target not losing HP; skipping"
@@ -386,12 +390,12 @@ class PriestEngine:
         if len(self.action_times) >= self.cfg.max_cast_per_minute:
             return Decision(None, "Action-rate safety limit; stopped", stop=True)
         # Optical zero during an active fight is ambiguous; never Tab blindly.
-        if target == 0 and not confirmed_gone and obs.target_exists is not True and self.target_since is not None:
+        if target == 0 and not confirmed_gone and obs.target_dead is not False and self.target_since is not None:
             if self.ambiguous_zero_since is None:
                 self.ambiguous_zero_since = now
             if now - self.ambiguous_zero_since >= 2.0:
-                return Decision(None, 'Zero target HP without death confirmation; stopped', stop=True)
-            return Decision(None, 'Zero target HP; verifying before target switch')
+                return Decision(None, 'Zero optical HP; unable to confirm death; stopped', stop=True)
+            return Decision(None, 'Zero optical HP; waiting for death confirmation')
         self.ambiguous_zero_since = None
         if not has_target:
             self._clear_current_target()
