@@ -159,10 +159,10 @@ PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
 assert(existsTile.rgb[1]==1 and deadTile.rgb[1]==.3,'no target should be absent/unknown')
 selectedTarget=true
 PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
-assert(existsTile.rgb[2]==1 and deadTile.rgb[2]==1,'live target should be true/not dead')
+assert(existsTile.rgb[2]==1 and deadTile.rgb[1]==1,'live target should be true/not dead')
 targetDead=true
 PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
-assert(deadTile.rgb[1]==1 and deadTile.rgb[2]==0,'dead target must be explicitly marked')
+assert(deadTile.rgb[2]==1 and deadTile.rgb[1]==0,'dead target must be explicitly marked')
 -- A secret boolean cannot be tested: emit unknown, never false.
 issecretvalue=function(value) return value=='secret' end
 selectedTarget='secret'
