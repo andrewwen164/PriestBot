@@ -22,6 +22,8 @@ class Observation:
     success_spell: str | None = None  # shield | pain | smite | mind_blast | heal
     success_seq: int | None = None
     target_seq: int | None = None
+    target_exists: bool | None = None
+    target_dead: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ class PriestEngine:
         self.failed_targets = 0
         self.no_target_attempts = 0
         self.no_target_since = None
+        self.ambiguous_zero_since = None
         self.next_search_at = 0.0
         self.wand_active = False
         self.melee_active = False
@@ -172,6 +175,8 @@ class PriestEngine:
 
     def update(self, obs: Observation, now: float) -> Decision:
         hp, mana, target = obs.hp, obs.mana, obs.target_hp
+        confirmed_gone = obs.target_exists is False or obs.target_dead is True
+        has_target = not confirmed_gone and (obs.target_exists is True or target > 0)
         # Explicit client target-change events keep per-target DoT estimates from
         # leaking onto a different mob (even when both have full health).
         if obs.target_seq is not None:
@@ -182,7 +187,7 @@ class PriestEngine:
                 self._clear_current_target()
                 self.last_pain = float('-inf')
                 self.confirmed_pain_until = float('-inf')
-                if target > .055 and self.cfg.main_damage == 'mind_blast_wand':
+                if has_target and self.cfg.main_damage == 'mind_blast_wand':
                     self.ready_at = min(self.ready_at, now)
         # A successful spell event is stronger evidence than an attempted key.
         # Don't count a stale strip repeatedly, or infer spell success from
@@ -200,10 +205,10 @@ class PriestEngine:
                     self.last_shield_confirmed_at = now
                     self.last_shield = now
                     self.confirmed_shield_until = now + self.cfg.shield_duration_s
-                elif obs.success_spell == 'pain' and target > .055:
+                elif obs.success_spell == 'pain' and has_target:
                     self.last_pain = now
                     self.confirmed_pain_until = now + self.cfg.pain_duration_s
-                elif (obs.success_spell == 'mind_blast' and target > .055 and
+                elif (obs.success_spell == 'mind_blast' and has_target and
                       self.cfg.main_damage == 'mind_blast_wand' and
                       self.mb_opener_state == 'casting'):
                     # Mind Blast's confirmed completion releases Pain at the
@@ -233,7 +238,7 @@ class PriestEngine:
                 self.observed_error_seq = obs.error_seq
             elif obs.error_seq != self.observed_error_seq:
                 self.observed_error_seq = obs.error_seq
-                if (obs.error == 'pain_resist' and target > .055 and
+                if (obs.error == 'pain_resist' and has_target and
                         self.target_since is not None and
                         0 <= now - self.last_pain_press_at <= self.cfg.pain_resist_window_s):
                     # UNIT_SPELLCAST_SUCCEEDED confirms the button was cast,
@@ -259,7 +264,7 @@ class PriestEngine:
                         self.ready_at = min(self.ready_at, self.mb_next_attempt_at)
                         if self.mb_attempts >= self.cfg.mind_blast_max_attempts:
                             self.pending_skip_reason = 'Repeated Mind Blast failures'
-                if (obs.error in ("range", "los", "facing") and target > .055 and
+                if (obs.error in ("range", "los", "facing") and has_target and
                     self.target_since is not None and
                     0 <= now - self.last_offensive_at <= 4.0):
                     # Movement is ONLY triggered by a new game-reported error.
@@ -316,9 +321,9 @@ class PriestEngine:
             # Clear immediately, ignoring the regular spell action delay.
             return self._act("clear_target", reason + "; clearing target", now)
         if self.target_since is not None:
-            if target <= .025:
+            if confirmed_gone:
                 self._clear_current_target()
-                # corpse can stay targeted; next_target targets enemies via tab
+                # Explicit target loss or death; never infer from low HP.
             elif self.last_target_hp is not None:
                 if target < self.last_target_hp - .015:
                     self.last_progress_at = now
@@ -360,7 +365,7 @@ class PriestEngine:
         # Move only when safe and only while target remains selected.  The
         # engine does not know the target bearing and cannot path around walls.
         if self.pending_movement is not None:
-            if target <= .055:
+            if not has_target:
                 self.pending_movement = None
             elif (self.cfg.use_heal and hp <= self.cfg.heal_below and
                   mana > self.cfg.heal_mana_min):
@@ -380,8 +385,14 @@ class PriestEngine:
             self.action_times.popleft()
         if len(self.action_times) >= self.cfg.max_cast_per_minute:
             return Decision(None, "Action-rate safety limit; stopped", stop=True)
-        # Consider >= ~5% target bar to indicate a target that is alive.
-        has_target = target > .055
+        # Optical zero during an active fight is ambiguous; never Tab blindly.
+        if target == 0 and not confirmed_gone and obs.target_exists is not True and self.target_since is not None:
+            if self.ambiguous_zero_since is None:
+                self.ambiguous_zero_since = now
+            if now - self.ambiguous_zero_since >= 2.0:
+                return Decision(None, 'Zero target HP without death confirmation; stopped', stop=True)
+            return Decision(None, 'Zero target HP; verifying before target switch')
+        self.ambiguous_zero_since = None
         if not has_target:
             self._clear_current_target()
             if self.no_target_since is None:
@@ -551,5 +562,6 @@ class PriestEngine:
         self.target_since = None
         self.last_progress_at = None
         self.last_target_hp = None
+        self.ambiguous_zero_since = None
         self.wand_active = False
         self.melee_active = False
