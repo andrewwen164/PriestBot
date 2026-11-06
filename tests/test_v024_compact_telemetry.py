@@ -143,12 +143,12 @@ def _stamp_target_state(image, *, scale=1, exists=True, dead=False, marker=True,
         width = max(1, round(8 * scale))
         image[top:top+width, left:left+width] = rgb
     if marker:
-        tile(160, (0, 153, 255))
+        tile(212, (0, 153, 255))
     def flag(value):
         return (0, 255, 0) if value is True else (
             (255, 0, 0) if value is False else (77, 77, 77))
-    tile(168, flag(exists))
-    tile(180, flag(dead))
+    tile(224, flag(exists))
+    tile(236, flag(dead))
     return image
 
 
@@ -207,9 +207,9 @@ def test_v026_normal_layout_target_state():
         tile(x,84,10,10,(77,77,77))
     for x in (64,76,88,100,112,124,136,148):
         tile(x,84,8,8,(64,64,64))
-    tile(160,84,8,8,(0,153,255))
-    tile(168,84,8,8,(0,255,0))
-    tile(180,84,8,8,(255,0,0))
+    tile(212,84,8,8,(0,153,255))
+    tile(224,84,8,8,(0,255,0))
+    tile(236,84,8,8,(255,0,0))
     image = np.full((240, 420, 3), (20, 40, 60), dtype=np.uint8)
     image[24:126, 32:302] = panel
     result = decode_bridge(image)
