@@ -116,9 +116,9 @@ end
 -- x160=version marker, x168=target exists, x180=target dead.
 -- Only readable booleans may be encoded; inaccessible secrets are UNKNOWN.
 -- Enemy health remains a native StatusBar, never converted to Lua numbers.
-local targetStateMarker = squareOnRow(160,84,8,0,.6,1)
-local targetExistsPixel = squareOnRow(168,84,8,.3,.3,.3)
-local targetDeadPixel = squareOnRow(180,84,8,.3,.3,.3)
+local targetStateMarker = squareOnRow(212,84,8,0,.6,1)
+local targetExistsPixel = squareOnRow(224,84,8,.3,.3,.3)
+local targetDeadPixel = squareOnRow(236,84,8,.3,.3,.3)
 local function safeTargetFlag(fn)
     if type(fn) ~= 'function' then return 'unknown' end
     local ok, value = pcall(fn, 'target')
@@ -496,9 +496,9 @@ local function setCompactMode(enabled)
     position(successPixel, 48, row)
     for i, tile in ipairs(successBits) do position(tile, 64 + (i-1)*12, row) end
     for i, tile in ipairs(targetBits) do position(tile, 112 + (i-1)*12, row) end
-    position(targetStateMarker, 160, row)
-    position(targetExistsPixel, 168, row)
-    position(targetDeadPixel, 180, row)
+    position(targetStateMarker, 212, row)
+    position(targetExistsPixel, 224, row)
+    position(targetDeadPixel, 236, row)
     for i, tile in ipairs(semTiles) do
         local columns = compactMode and 16 or 8
         local col = (i-1)%columns
