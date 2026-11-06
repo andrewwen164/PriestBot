@@ -253,6 +253,35 @@ def _v08(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int = 84):
         return value
     return shield,pain,last,bits((64,76,88,100), 'success'),bits((112,124,136,148), 'target')
 
+def _target_state(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int):
+    """Decode v0.26 flags; absent marker means legacy unknown state."""
+    def sample(px):
+        sx = x + round((px + 4) * scale)
+        sy = y + round((row_y + 4) * scale)
+        if sx < 0 or sy < 0 or sx >= rgb.shape[1] or sy >= rgb.shape[0]:
+            raise BridgeNotFound('PriestBridge target-state row clipped')
+        return tuple(int(v) for v in rgb[sy, sx, :3])
+
+    r, g, b = sample(160)
+    if not (r < 65 and 120 <= g <= 210 and b >= 205):
+        return None, None
+
+    def flag(px):
+        r, g, b = sample(px)
+        if g >= 190 and r < 75 and b < 75:
+            return True
+        if r >= 190 and g < 75 and b < 75:
+            return False
+        if 40 <= r <= 120 and 40 <= g <= 120 and 40 <= b <= 120:
+            return None
+        raise BridgeNotFound('Unrecognized PriestBridge target-state color')
+
+    exists, dead = flag(168), flag(180)
+    if exists is not True and dead is not None:
+        raise BridgeNotFound('Contradictory PriestBridge target-state flags')
+    return exists, dead
+
+
 def decode_bridge(rgb: np.ndarray) -> BridgeReading:
     if rgb.ndim != 3 or rgb.shape[2] < 3:
         raise ValueError('RGB image expected')
@@ -270,8 +299,10 @@ def decode_bridge(rgb: np.ndarray) -> BridgeReading:
     target_hp = _fraction(rgb, x, y, scale, ys[2], 'target', compact)
     casting, err, seq = _status(rgb, x, y, scale)
     shield,pain,success,success_seq,target_seq = _v08(rgb,x,y,scale,37 if compact else 84)
+    exists, dead = _target_state(rgb, x, y, scale, 37 if compact else 84)
     obs = Observation(hp, mana, target_hp, casting, err, seq,
-                      shield, pain, success, success_seq, target_seq)
+                      shield, pain, success, success_seq, target_seq,
+                      exists, dead)
     return BridgeReading(obs, x, y, scale, 'compact' if compact else 'normal')
 
 
