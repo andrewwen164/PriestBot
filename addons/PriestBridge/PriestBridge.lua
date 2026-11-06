@@ -1,4 +1,4 @@
--- PriestBridge v0.25.3. Client-side, display-only telemetry for a permitted private client.
+-- PriestBridge v0.26.0. Client-side, display-only telemetry for a permitted private client.
 -- No game-memory access, sockets, arbitrary filesystem access or protected game actions.
 -- Modern combat secrets: never compare/calculate/display text from secret health values.
 -- Health/mana/target bars use the native StatusBar widget, as in v0.6.
@@ -46,6 +46,7 @@ local hp = makeBar(20, 0, 1, 0)
 local mana = makeBar(40, 0, 0.38, 1)
 local enemy = makeBar(60, 1, 0, 0)
 local errors = 0
+local refreshTargetState
 local function paint(bar, unit, isMana)
     local ok = pcall(function()
         if not UnitExists(unit) then
@@ -74,6 +75,7 @@ local function refresh()
     paint(hp, 'player', false)
     paint(mana, 'player', true)
     paint(enemy, 'target', false)
+    if refreshTargetState then refreshTargetState() end
 end
 
 -- Protocol v0.7, y=0, all squares display-only, event-driven.
@@ -109,6 +111,34 @@ local successBits, targetBits = {}, {}
 for i=1,4 do
     successBits[i] = squareOnRow(64+(i-1)*12,84,8,.25,.25,.25)
     targetBits[i] = squareOnRow(112+(i-1)*12,84,8,.25,.25,.25)
+end
+-- v0.26 additive target-state protocol, shared normal/compact row.
+-- x160=version marker, x168=target exists, x180=target dead.
+-- Only readable booleans may be encoded; inaccessible secrets are UNKNOWN.
+-- Enemy health remains a native StatusBar, never converted to Lua numbers.
+local targetStateMarker = squareOnRow(212,84,8,0,.6,1)
+local targetExistsPixel = squareOnRow(224,84,8,.3,.3,.3)
+local targetDeadPixel = squareOnRow(236,84,8,.3,.3,.3)
+local function safeTargetFlag(fn)
+    if type(fn) ~= 'function' then return 'unknown' end
+    local ok, value = pcall(fn, 'target')
+    if not ok then return 'unknown' end
+    if issecretvalue and issecretvalue(value) then return 'unknown' end
+    if canaccessvalue and not canaccessvalue(value) then return 'unknown' end
+    if value == nil then return 'unknown' end
+    return value and 'yes' or 'no'
+end
+local function paintTargetFlag(tile, value)
+    if value == 'yes' then tile:SetColorTexture(0,1,0,1)
+    elseif value == 'no' then tile:SetColorTexture(1,0,0,1)
+    else tile:SetColorTexture(.3,.3,.3,1) end
+end
+refreshTargetState = function()
+    local exists = safeTargetFlag(UnitExists)
+    local dead = 'unknown'
+    if exists == 'yes' then dead = safeTargetFlag(UnitIsDeadOrGhost) end
+    paintTargetFlag(targetExistsPixel, exists)
+    paintTargetFlag(targetDeadPixel, dead)
 end
 local successSeq, targetSeq, recentSuccess = 0,0,'none'
 local recentPainSuccessAt, recentPainTargetSeq = -math.huge, -1
@@ -240,6 +270,9 @@ local function redrawSignals()
     successPixel:SetShown(signalsEnabled)
     for _,t in ipairs(successBits) do t:SetShown(signalsEnabled) end
     for _,t in ipairs(targetBits) do t:SetShown(signalsEnabled) end
+    targetStateMarker:SetShown(signalsEnabled)
+    targetExistsPixel:SetShown(signalsEnabled)
+    targetDeadPixel:SetShown(signalsEnabled)
     if not signalsEnabled then return end
     if casting then castingPixel:SetColorTexture(0,1,0,1)
     else castingPixel:SetColorTexture(.3,.3,.3,1) end
@@ -382,6 +415,7 @@ ROOT:SetScript('OnUpdate', function(self, dt)
 end)
 redrawSignals()
 evaluateAuras()
+refreshTargetState()
 
 SLASH_PRIESTBRIDGE1 = '/priestbridge'
 SLASH_PRIESTBRIDGE2 = '/pb'
@@ -462,6 +496,9 @@ local function setCompactMode(enabled)
     position(successPixel, 48, row)
     for i, tile in ipairs(successBits) do position(tile, 64 + (i-1)*12, row) end
     for i, tile in ipairs(targetBits) do position(tile, 112 + (i-1)*12, row) end
+    position(targetStateMarker, 212, row)
+    position(targetExistsPixel, 224, row)
+    position(targetDeadPixel, 236, row)
     for i, tile in ipairs(semTiles) do
         local columns = compactMode and 16 or 8
         local col = (i-1)%columns

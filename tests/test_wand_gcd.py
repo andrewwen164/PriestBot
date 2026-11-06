@@ -40,9 +40,9 @@ def test_healing_cancels_pending_wand_start():
 def test_target_change_cancels_pending_wand_start():
     e = PriestEngine(Config(main_damage="wand", use_shield=False))
     assert e.update(o(), 0).action == 'pain'
-    assert e.update(o(target=0), .6).action == 'next_target'
+    assert e.update(o(target=0, target_exists=False), .6).action == 'next_target'
     assert e.wand_start_at is None
-    assert e.update(o(target=0), 2.3).action == 'next_target'
+    assert e.update(o(target=0, target_exists=False), 2.3).action == 'next_target'
     assert e.update(o(target=1), 4.0).action == 'pain'
     assert e.update(o(target=1), 4.3).action is None
     assert e.update(o(target=1), 5.6).action == 'wand'

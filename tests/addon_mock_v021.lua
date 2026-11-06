@@ -35,8 +35,11 @@ function CreateFrame(kind,name,parent)
   return self
 end
 local clock=0
+local selectedTarget=false
+local targetDead=false
 function GetTime() return clock end
-function UnitExists(u) return u=='player' end
+function UnitExists(u) return u=='player' or (u=='target' and selectedTarget) end
+function UnitIsDeadOrGhost(u) return u=='target' and targetDead end
 function UnitHealthMax() return 100 end
 function UnitHealth() return 100 end
 function UnitPowerMax() return 100 end
@@ -139,10 +142,44 @@ clock=clock+.1
 signalFrame.OnEvent(signalFrame,'UNIT_COMBAT','target','MISS','',0,32)
 assert(resistPixel.rgb[1]==1 and resistPixel.rgb[2]==1,
        'fresh Shadow miss did not set Pain retry signal')
+-- Target-state status uses readable boolean APIs, not secret health maths.
+local function targetTile(x, row)
+  for _,tile in ipairs(PriestBridgeFrame.children) do
+    if tile.point and tile.point[4]==x and tile.point[5]==-row then
+      return tile
+    end
+  end
+  error('missing target-state tile '..x)
+end
+local markerTile=targetTile(212,84)
+local existsTile=targetTile(224,84)
+local deadTile=targetTile(236,84)
+assert(markerTile.rgb[2]==.6 and markerTile.rgb[3]==1,'target protocol marker missing')
+PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
+assert(existsTile.rgb[1]==1 and deadTile.rgb[1]==.3,'no target should be absent/unknown')
+selectedTarget=true
+PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
+assert(existsTile.rgb[2]==1 and deadTile.rgb[1]==1,'live target should be true/not dead')
+targetDead=true
+PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
+assert(deadTile.rgb[2]==1 and deadTile.rgb[1]==0,'dead target must be explicitly marked')
+-- A secret boolean cannot be tested: emit unknown, never false.
+issecretvalue=function(value) return value=='secret' end
+selectedTarget='secret'
+PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
+assert(existsTile.rgb[1]==.3 and deadTile.rgb[1]==.3,'secret existence must be unknown')
+selectedTarget=true
+targetDead='secret'
+PriestBridgeFrame.OnUpdate(PriestBridgeFrame,.21)
+assert(existsTile.rgb[2]==1 and deadTile.rgb[1]==.3,'secret death must be unknown')
+issecretvalue=nil
+targetDead=false
 -- Compact is purely a visual relayout: bindings/packets continue unchanged.
 SlashCmdList.PRIESTBRIDGE('compact')
 assert(PriestBridgeSettings.compact == true)
 assert(PriestBridgeFrame.w == 350 and PriestBridgeFrame.h == 48)
+assert(markerTile.point[5]==-37 and existsTile.point[5]==-37 and deadTile.point[5]==-37,
+       'target-state flags must move with compact row')
 assert(PriestBridgeFrame.point[1]=='BOTTOMRIGHT')
 assert(PriestBridgeFrame.point[4]==-12 and PriestBridgeFrame.point[5]==12)
 local compactBars = 0
