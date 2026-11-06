@@ -262,7 +262,7 @@ def _target_state(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int):
             raise BridgeNotFound('PriestBridge target-state row clipped')
         return tuple(int(v) for v in rgb[sy, sx, :3])
 
-    r, g, b = sample(160)
+    r, g, b = sample(212)
     if not (r < 65 and 120 <= g <= 210 and b >= 205):
         return None, None
 
@@ -276,7 +276,7 @@ def _target_state(rgb: np.ndarray, x: int, y: int, scale: float, row_y: int):
             return None
         raise BridgeNotFound('Unrecognized PriestBridge target-state color')
 
-    exists, dead = flag(168), flag(180)
+    exists, dead = flag(224), flag(236)
     if exists is not True and dead is not None:
         raise BridgeNotFound('Contradictory PriestBridge target-state flags')
     return exists, dead
